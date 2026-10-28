@@ -464,7 +464,7 @@ const I18N = { de: {
   'Answers received:':'Antworten erhalten:', 'of {0} online':'von {0} online', 'answered':'beantwortet', 'online':'online', 'Results':'Ergebnis',
   'Question {0} / {1}':'Frage {0} / {1}', '{0} answers:':'{0} Antworten:', '{0} answer:':'{0} Antwort:', 'correct':'richtig', 'wrong':'falsch', 'no answer':'ohne Antwort',
   'Reveal answer':'Auflösen', 'Next question ▶':'Nächste Frage ▶', 'Finish':'Ende', 'Show explanation':'Erklärung zeigen', 'Hide explanation':'Erklärung ausblenden',
-  'End session ■':'Sitzung beenden ■', 'Questions':'Fragen', 'QR code':'QR-Code', 'Join:':'Teilnehmen:', 'code':'Code', 'Figure':'Abbildung',
+  'End session ■':'Sitzung beenden ■', '← Back':'← Zurück', 'Back':'Zurück', 'Questions':'Fragen', 'QR code':'QR-Code', 'Join:':'Teilnehmen:', 'code':'Code', 'Figure':'Abbildung',
   'Practice statistics ↗':'Übungsstatistik ↗'
 } };
 const T = (s, ...a) => { const d = COURSE && I18N[COURSE.lang]; let t = (d && d[s]) || s; a.forEach((v, i) => { t = t.split('{' + i + '}').join(v); }); return t; };
@@ -584,9 +584,28 @@ const figHTML = q => !q.fig ? '' : (Array.isArray(q.fig) ? '<div class="figs">'+
    ROUTING
    ==================================================================== */
 let route = {name:'home'};
-function go(r){ cleanup(); route=r; render(); window.scrollTo(0,0); }
+// Browser history: every page change in the app is its own history entry, so the browser's Back button (and the in-page Back buttons) work.
+let HN=0; const HIST={};   // entry number -> {r: route, c: course id}
+const hstate = () => history.state && history.state.k!=null ? history.state : null;
+function remember(){ const k=++HN, d=hstate()?hstate().d||0:0; HIST[k]={r:route, c:COURSE?COURSE.id:null}; return {k,d}; }
+function go(r, url){
+  cleanup();
+  const href = url || location.pathname+location.search+location.hash, same = r.name===route.name && r.name!=='practice' && href===location.pathname+location.search+location.hash;
+  route=r; const cur=remember();
+  if(same) history.replaceState(cur,'',href); else history.pushState({k:cur.k,d:cur.d+1},'',href);
+  render(); window.scrollTo(0,0);
+}
+window.addEventListener('popstate', e=>{
+  const h = e.state && e.state.k!=null ? HIST[e.state.k] : null;
+  cleanup();
+  if(!h){ bootRoute(); return; }
+  if(h.c){ if(!COURSE||COURSE.id!==h.c) useCourse(h.c); } else { COURSE=null; document.title=TITLE; }
+  route = h.r.name==='practice' ? {name:'practice', stage:'setup'} : h.r;
+  render(); window.scrollTo(0,0);
+});
 function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
-function bootRoute(){
+function bootRoute(){ bootRoute0(); const st=hstate(), cur=remember(); history.replaceState({k:cur.k,d:st?st.d||0:0},'',location.pathname+location.search+location.hash); }
+function bootRoute0(){
   const qs = new URLSearchParams(location.search), act = activeCourses(), want = qs.get('course');
   if(!qs.get('join') && !/^#(host|stats|check|lecturer)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
   if(want && !useCourse(want)) { route={name:'courses', missing:want}; render(); return; }
@@ -616,7 +635,7 @@ function render(){
   else if(route.name==='lecturer') viewLecturer();
 }
 function header(extra){
-  const back = COURSE && route.name!=='courses' && route.name!=='live' && activeCourses().length>1 ? '<button class="btn ghost back" data-act="allcourses" title="'+T('Back to the list of courses')+'">'+T('← All courses')+'</button>' : '';
+  const back = (route.name!=='home' && route.name!=='courses') ? '<button class="btn ghost back" data-act="back" title="'+T('Back')+'">'+T('← Back')+'</button>' : (COURSE && route.name==='home' && activeCourses().length>1 ? '<button class="btn ghost back" data-act="allcourses" title="'+T('Back to the list of courses')+'">'+T('← All courses')+'</button>' : '');
   return '<div class="top'+(extra?' compact':'')+'">'+back+'<div class="brand" data-act="home"><div class="logo"><svg viewBox="0 0 64 64"><path d="M8 44 C20 44 20 18 32 18 S44 44 56 44" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg></div><span class="bt">'+esc(COURSE?COURSE.title+' '+T('Quiz'):TITLE)+'</span></div><div class="grow"></div>'+(extra||'')+
     '<button class="btn ghost" data-act="theme" title="Toggle light / dark" aria-label="Toggle theme">'+THEME_ICON+'</button></div>';
 }
@@ -627,13 +646,13 @@ document.addEventListener('click', e => {
   const fn = ACTS[act]; if(fn) fn(arg, t, e);
 });
 const ACTS = {
-  home(){ if(!COURSE){ history.replaceState(null,'',location.pathname); go({name:'courses'}); return; } history.replaceState(null,'',courseURL(COURSE.id)); go({name:'home'}); },
-  allcourses(){ COURSE=null; document.title=TITLE; history.replaceState(null,'',location.pathname+'?all'); go({name:'courses'}); },
-  pickcourse(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); history.replaceState(null,'',courseURL(id)); go({name:'home'}); },
+  home(){ if(!COURSE){ go({name:'courses'}, location.pathname); return; } go({name:'home'}, courseURL(COURSE.id)); },
+  allcourses(){ COURSE=null; document.title=TITLE; go({name:'courses'}, location.pathname+'?all'); },
+  pickcourse(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'home'}, courseURL(id)); },
   theme(){ const cur=document.documentElement.getAttribute('data-theme'); const dark=window.matchMedia('(prefers-color-scheme: dark)').matches; const next=(cur?cur==='dark':dark)?'light':'dark'; document.documentElement.setAttribute('data-theme',next); LS.set('lq.theme',next); },
   practice(){ go({name:'practice', stage:'setup'}); },
-  host(){ history.replaceState(null,'',courseURL(COURSE.id,'#host')); go({name:'host'}); },
-  joinGo(){ const v=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(v.length<3){ document.getElementById('code').focus(); return; } history.replaceState(null,'',location.pathname+'?join='+v); go({name:'live', code:v}); },
+  host(){ go({name:'host'}, courseURL(COURSE.id,'#host')); },
+  joinGo(){ const v=(document.getElementById('code').value||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(v.length<3){ document.getElementById('code').focus(); return; } go({name:'live', code:v}, location.pathname+'?join='+v); },
 };
 const THEME_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>';
 const savedTheme = LS.get('lq.theme',null); if(savedTheme) document.documentElement.setAttribute('data-theme',savedTheme);
@@ -657,18 +676,19 @@ function viewLecturer(){
     '<p class="muted small" style="margin-top:20px"><button class="link" data-act="lectback">← Back to the quiz</button>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+'</p></div>';
 }
 Object.assign(ACTS, {
-  lecturer(){ history.replaceState(null,'',location.pathname+'#lecturer'); go({name:'lecturer'}); },
-  lectback(){ if(COURSE){ history.replaceState(null,'',courseURL(COURSE.id)); go({name:'home'}); } else { history.replaceState(null,'',location.pathname); go({name:'courses'}); } },
-  lhost(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); history.replaceState(null,'',courseURL(id,'#host')); go({name:'host'}); },
-  lstats(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); history.replaceState(null,'',courseURL(id,'#stats')); go({name:'stats'}); },
-  lcheck(){ history.replaceState(null,'',location.pathname+'#check'); go({name:'check'}); },
+  back(){ const st=hstate(); if(st&&st.d>0) history.back(); else ACTS.home(); },
+  lecturer(){ go({name:'lecturer'}, location.pathname+'#lecturer'); },
+  lectback(){ ACTS.back(); },
+  lhost(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'host'}, courseURL(id,'#host')); },
+  lstats(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'stats'}, courseURL(id,'#stats')); },
+  lcheck(){ go({name:'check'}, location.pathname+'#check'); },
   async lectlogin(){
     const i=document.getElementById('lpw'), er=document.getElementById('lerr'); if(!i) return;
     if(!(window.crypto&&crypto.subtle)){ er.textContent='This browser cannot check passwords on an insecure connection (use https).'; return; }
     const h=await sha256hex('lq-lecturer|'+i.value);
     if(h===LECTURER_HASH){ LS.set('lq.lect',h); render(); } else { er.textContent='Wrong password.'; i.select(); }
   },
-  lectout(){ try{ localStorage.removeItem('lq.lect'); }catch(e){} history.replaceState(null,'',COURSE?courseURL(COURSE.id):location.pathname); go(COURSE?{name:'home'}:{name:'courses'}); }
+  lectout(){ try{ localStorage.removeItem('lq.lect'); }catch(e){} go(COURSE?{name:'home'}:{name:'courses'}, COURSE?courseURL(COURSE.id):location.pathname); }
 });
 
 /* ====================================================================
@@ -1144,7 +1164,7 @@ function hostPaint(){
   const fileWarn = location.protocol==='file:' ? '<div class="banner" style="margin:0 0 12px">This page was opened from a local file. Students cannot reach it — publish it (e.g. GitHub Pages) and open that address, otherwise the QR code will not work.</div>' : '';
   let html='';
   if(H.phase==='lobby' || !q){
-    html='<div class="proj"><div class="ph"><span class="brand" data-act="home" style="font-size:1em">'+esc(COURSE.title)+' · '+T('Live quiz')+'</span><span class="sp"></span><span id="hstat" class="status"></span><button class="btn ghost" data-act="theme" aria-label="Toggle theme">'+THEME_ICON+'</button></div>'+
+    html='<div class="proj"><div class="ph"><button class="btn ghost" data-act="back">'+T('← Back')+'</button><span class="brand" data-act="home" style="font-size:1em">'+esc(COURSE.title)+' · '+T('Live quiz')+'</span><span class="sp"></span><span id="hstat" class="status"></span><button class="btn ghost" data-act="theme" aria-label="Toggle theme">'+THEME_ICON+'</button></div>'+
       '<div class="lobby"><div>'+fileWarn+'<div class="qrbox">'+qrSvg(url)+'</div></div>'+
       '<div class="stack" style="min-width:0"><div class="muted">'+T('Scan the QR code, or go to')+'</div><div class="joinurl">'+esc(location.host+location.pathname.replace(/index\.html$/,''))+'</div><div class="muted">'+T('and enter the code')+'</div><div class="code">'+H.code+'</div>'+
       '<div><span class="bigcount" data-hc>'+presentCount()+'</span> <span class="muted">'+T('connected')+'</span></div>'+
@@ -1353,7 +1373,6 @@ Object.assign(ACTS,{
    ==================================================================== */
 const start=()=>loadCourses().then(bootRoute);
 if(document.readyState==='loading') window.addEventListener('DOMContentLoaded', start); else start();
-window.addEventListener('popstate', ()=>{ cleanup(); bootRoute(); });
 })();
 </script>
 </body>

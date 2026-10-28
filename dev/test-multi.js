@@ -89,6 +89,18 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   await lk.click('[data-act=lecturer]'); await lk.waitForSelector('#lpw'); check(true, 'Lecturer button asks for the password after log out');
   await lk.fill('#lpw', 'Towbin-Lecturer'); await lk.click('[data-act=lectlogin]'); await lk.waitForSelector('[data-act=lhost]'); await lk.click('[data-act=lhost][data-arg=example]');
   await lk.waitForFunction(() => /Room online/.test((document.getElementById('hstat') || {}).textContent || ''), null, { timeout: 15000 }); check(true, 'login from the button -> menu -> presenter view');
+  console.log('BACK NAVIGATION');
+  const nv = await page(); await nv.goto(B); await nv.waitForSelector('[data-act=pickcourse]');
+  const on = async sel => nv.waitForSelector(sel, { timeout: 5000 });
+  await nv.click('[data-act=pickcourse][data-arg=example]'); await on('.hero'); await nv.click('[data-act=practice]'); await on('.wrap h2');
+  check(/course=example/.test(nv.url()), 'URL follows the course');
+  await nv.goBack(); await on('.hero'); check(await nv.$('[data-act=practice]') !== null, 'browser Back: practice setup -> course start page');
+  await nv.goBack(); await on('[data-act=pickcourse]'); check(true, 'browser Back: course start page -> course list');
+  await nv.goForward(); await on('.hero'); check(/Example course/.test(await nv.innerText('.hero')), 'browser Forward restores the course');
+  await nv.click('[data-act=practice]'); await on('[data-act=back]'); await nv.click('[data-act=back]'); await on('.hero'); check(true, 'in-page Back button on the practice page');
+  await nv.click('[data-act=lecturer]'); await on('[data-act=lcheck]');
+  await nv.click('[data-act=lcheck]'); await on('#dz'); await nv.click('[data-act=back]'); await on('[data-act=lhost]'); check(true, 'Back from the checker returns to the lecturer menu');
+  await nv.click('[data-act=lhost][data-arg=example]'); await nv.waitForFunction(() => document.querySelector('.lobby') !== null, null, { timeout: 15000 }); await nv.click('.ph [data-act=back]'); await on('[data-act=lhost]'); check(true, 'Back from the presenter lobby returns to the menu');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });
