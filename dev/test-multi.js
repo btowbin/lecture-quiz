@@ -19,7 +19,7 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   const b = await chromium.launch(); const errors = [];
   const page = async (w, h) => { const p = await (await b.newContext({ viewport: { width: w || 1100, height: h || 900 } })).newPage();
     p.on('pageerror', e => { if (!/Unexpected token/.test(e.message)) errors.push(e.message); }); p.on('console', m => { if (m.type() === 'error' && !/favicon|WebSocket|ERR_|404|ghost/.test(m.text())) errors.push(m.text()); });
-    await p.addInitScript(() => { window.SBQ_BROKERS = ['ws://127.0.0.1:9021/']; window.SBQ_STATS = 'http://127.0.0.1:1'; });
+    await p.addInitScript(() => { window.SBQ_BROKERS = ['ws://127.0.0.1:9021/']; window.SBQ_STATS = 'http://127.0.0.1:1'; if (!window.__LOCKED) window.SBQ_LECT_HASH = ''; });
     await p.route(/cdn\.jsdelivr\.net/, r => { const u = r.request().url(); for (const [re, f, t] of CDN) { const m = u.match(re); if (m) { const ff = f || NM('katex/dist/fonts/' + m[1]); if (fs.existsSync(ff)) return r.fulfill({ body: fs.readFileSync(ff), contentType: t }); } } r.abort(); });
     return p; };
 
@@ -74,6 +74,16 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
 
   console.log('\nerrors:', errors.length); errors.slice(0, 10).forEach(e => console.log('  ', e));
   check(errors.length === 0, 'no page errors');
+  console.log('LECTURER PASSWORD');
+  const lk = await page(); await lk.addInitScript(() => { delete window.SBQ_LECT_HASH; });
+  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero');
+  const foot = await lk.innerText('body'); check(!/presenter view|Practice statistics|Check/i.test(foot.replace(/Check your/gi, '')) , 'students see no lecturer links');
+  for (const h of ['#host', '#stats', '#check']) { await lk.goto(B + '?course=sysbio' + h); await lk.reload(); await lk.waitForSelector('#lpw'); check(true, h + ' asks for the password'); }
+  await lk.fill('#lpw', 'wrong'); await lk.click('[data-act=lectlogin]'); await lk.waitForFunction(() => /Wrong/.test(document.getElementById('lerr').textContent)); check(true, 'wrong password rejected');
+  await lk.fill('#lpw', 'Towbin-Lecturer'); await lk.click('[data-act=lectlogin]'); await lk.waitForSelector('#dz'); check(true, 'correct password opens the checker');
+  await lk.goto(B + '?course=sysbio#stats'); await lk.reload(); await lk.waitForSelector('.st-tiles'); check(true, 'stays unlocked on this browser');
+  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero'); check(/presenter view/i.test(await lk.innerText('body')), 'lecturer links visible after login');
+  await lk.click('[data-act=lectout]'); await lk.waitForSelector('.hero'); check(!/presenter view/i.test(await lk.innerText('body')), 'log out hides them again');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });

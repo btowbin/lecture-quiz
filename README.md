@@ -34,6 +34,10 @@ Question types: single choice (default), true/false sets (`type:'tf'`) and short
 
 Rules that keep questions good: every question must make sense on its own (they are shuffled); ids never change once students have used them; write `\lt` / `\gt` instead of `<` / `>` inside formulas.
 
+## Lecturer password
+
+Presenter view, practice statistics and the course checker ask for a password; students see no links to them. Open the links directly (bookmark them) and log in once per browser (*Log out* is at the bottom of the start page). It is a light barrier, not real security: the page is public and the password hash is readable in the code. Change it with `node dev/set-password.js "<new password>"` (then commit and push `index.html` and `dev/app.html`); an empty password `""` switches it off.
+
 ## Running a live session
 
 1. Open `…/?course=<id>#host` on the lecture computer. A QR code and a room code appear; the room code is remembered, so the QR code can stay on your slides.

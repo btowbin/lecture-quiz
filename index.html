@@ -279,7 +279,7 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 /* ====================================================================
    SETTINGS  (edit here)
    ==================================================================== */
-const BUILD        = '2026-10-28 07:33';                // version stamp (shown at the bottom of the pages)
+const BUILD        = '2026-10-28 08:39';                // version stamp (shown at the bottom of the pages)
 const TITLE        = 'Lecture quizzes';          // site title (course picker); each course has its own title
 const COURSE_DIR   = 'courses/';                 // where courses.js and the course files live
 // LIVE MODE TRANSPORT: messages travel through free public MQTT brokers (MQTT over secure WebSocket, no account needed).
@@ -295,6 +295,9 @@ const dec = b => { try{ return JSON.parse(typeof b==='string' ? b : new TextDeco
 // View the numbers at <site>/#stats .  Set STATS_NS = '' to switch counting off.
 const STATS_URL = window.SBQ_STATS || 'https://abacus.jasoncameron.dev';
 const STATS_NS  = 'lq-towbinlab-unibe';
+// LECTURER PASSWORD: presenter view, statistics and the course checker ask for it (a light barrier against curious students, not real security —
+// the page is public, so the hash is readable). Change it with:  node dev/set-password.js <new password>   (writes the hash below and rebuilds index.html)
+const LECTURER_HASH = window.SBQ_LECT_HASH !== undefined ? window.SBQ_LECT_HASH : '847e70d73b2fa8c8e657d74e0b54ef990aae44f11a0f29bcecdf61f6686f5015';   // '' = no password
 const hostOf = u => { try{ return new URL(u).host; }catch(e){ return u; } };
 
 /* ====================================================================
@@ -306,6 +309,8 @@ const LS = {
   get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 };
+async function sha256hex(t){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+const lecturerOK = () => !LECTURER_HASH || LS.get('lq.lect',null)===LECTURER_HASH;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS = 'ABCDEFGH';
 /* ====================================================================
@@ -599,6 +604,7 @@ function bootRoute(){
 }
 function render(){
   document.body.classList.remove('hide-cursor');
+  if((route.name==='host'||route.name==='stats'||route.name==='check') && !lecturerOK()){ viewLogin(); return; }
   if(route.name==='home') viewHome();
   else if(route.name==='practice') viewPractice();
   else if(route.name==='live') viewLive();
@@ -631,6 +637,26 @@ const THEME_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden=
 const savedTheme = LS.get('lq.theme',null); if(savedTheme) document.documentElement.setAttribute('data-theme',savedTheme);
 
 /* ====================================================================
+   LECTURER LOGIN  (presenter view, statistics, course checker)
+   ==================================================================== */
+function viewLogin(){
+  document.title = 'Lecturer login';
+  app.innerHTML = '<div class="wrap" style="max-width:520px">'+header()+'<div class="card stack" style="margin-top:20px"><h2>Lecturer login</h2><p class="muted small">This area is for the lecturer (presenter view, statistics, course checker).</p>'+
+    '<div class="row"><input id="lpw" type="password" autocomplete="current-password" placeholder="Password" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit"><button class="btn primary" data-act="lectlogin">Open</button></div>'+
+    '<div id="lerr" class="small" style="color:var(--bad);min-height:1.2em"></div></div></div>';
+  const i=document.getElementById('lpw'); i.focus(); i.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.lectlogin(); });
+}
+Object.assign(ACTS, {
+  async lectlogin(){
+    const i=document.getElementById('lpw'), er=document.getElementById('lerr'); if(!i) return;
+    if(!(window.crypto&&crypto.subtle)){ er.textContent='This browser cannot check passwords on an insecure connection (use https).'; return; }
+    const h=await sha256hex('lq-lecturer|'+i.value);
+    if(h===LECTURER_HASH){ LS.set('lq.lect',h); render(); } else { er.textContent='Wrong password.'; i.select(); }
+  },
+  lectout(){ try{ localStorage.removeItem('lq.lect'); }catch(e){} history.replaceState(null,'',COURSE?courseURL(COURSE.id):location.pathname); go(COURSE?{name:'home'}:{name:'courses'}); }
+});
+
+/* ====================================================================
    HOME
    ==================================================================== */
 function viewHome(){
@@ -640,7 +666,7 @@ function viewHome(){
     '<div class="card choice"><h2>'+T('Practise on your own')+'</h2><p>'+T('{0} questions across {1} topics. Pick lectures, get instant feedback and explanations. Your progress stays in this browser.',QUESTIONS.length,lecNums.length)+'</p><button class="btn primary big" data-act="practice">'+T('Start practising')+'</button></div>'+
     '<div class="card choice"><h2>'+T('Join the live quiz')+'</h2><p>'+T('Scan the QR code on the screen, or type the room code shown by your lecturer.')+'</p><div class="row"><input id="code" class="codein" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn primary big" data-act="joinGo">'+T('Join')+'</button></div></div>'+
   '</div>'+
-  '<p class="muted small" style="margin-top:28px">'+T('Lecturer?')+' <button class="link" data-act="host">'+T('Open presenter view')+'</button> · <a class="link" href="'+courseURL(COURSE.id,'#stats')+'">'+T('Practice statistics')+'</a>'+(activeCourses().length>1?' · <button class="link" data-act="allcourses">'+T('All courses')+'</button>':'')+'</p><p class="muted small">Version '+esc(BUILD)+'</p></div>';
+  '<p class="muted small" style="margin-top:28px">'+(lecturerOK()?T('Lecturer?')+' <button class="link" data-act="host">'+T('Open presenter view')+'</button> · <a class="link" href="'+courseURL(COURSE.id,'#stats')+'">'+T('Practice statistics')+'</a> · <a class="link" href="'+location.pathname+'#check">Check</a>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+(activeCourses().length>1?' · ':''):'')+(activeCourses().length>1?'<button class="link" data-act="allcourses">'+T('All courses')+'</button>':'')+'</p><p class="muted small">Version '+esc(BUILD)+'</p></div>';
   const inp=document.getElementById('code'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.joinGo(); });
 }
 
@@ -652,7 +678,7 @@ function viewCourses(){
     (route.missing ? '<div class="banner">The course “'+esc(route.missing)+'” is not available (not activated, or its file failed to load).</div>' : '')+
     (act.length ? '<div class="chips">'+cards+'</div>' : '<div class="card">No course is activated yet. Add a course file to <code>courses/</code> and switch it on in <code>courses/courses.js</code>.</div>')+
     '<div class="card choice" style="margin-top:20px"><h2>Join a live quiz</h2><p>Scan the QR code on the screen, or type the room code shown by your lecturer.</p><div class="row"><input id="code" class="codein" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn primary big" data-act="joinGo">Join</button></div></div>'+
-    '<p class="muted small" style="margin-top:28px"><a class="link" href="'+location.pathname+'#check">Check a course file</a> · Version '+esc(BUILD)+'</p></div>';
+    '<p class="muted small" style="margin-top:28px">'+(lecturerOK()?'<a class="link" href="'+location.pathname+'#check">Check a course file</a>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+' · ':'')+'Version '+esc(BUILD)+'</p></div>';
   const inp=document.getElementById('code'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.joinGo(); });
 }
 

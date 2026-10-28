@@ -19,7 +19,7 @@ async function newPage(ctx, errors, tag, brokers) {
   const p = await ctx.newPage();
   p.on('pageerror', e => errors.push(tag + ' pageerror: ' + e.message));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|WebSocket|ERR_/.test(m.text())) errors.push(tag + ' console: ' + m.text()); });
-  await p.addInitScript(b => { window.SBQ_BROKERS = b; window.SBQ_STATS = 'http://127.0.0.1:9301'; }, brokers || BROKERS);
+  await p.addInitScript(b => { window.SBQ_BROKERS = b; window.SBQ_STATS = 'http://127.0.0.1:9301'; window.SBQ_LECT_HASH = ''; }, brokers || BROKERS);
   await p.route(/cdn\.jsdelivr\.net/, route => {
     const u = route.request().url();
     for (const [re, file, type] of CDN) {
