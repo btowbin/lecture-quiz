@@ -1,0 +1,79 @@
+// Multi-course test: courses.js is served with BOTH courses active; checks picker, per-course storage,
+// live mode with the course carried in the state, the #check page (good + broken files).
+const fs = require('fs'), path = require('path'), http = require('http');
+const { chromium } = require('playwright');
+const aedesF = require('aedes'), wsStream = require('websocket-stream');
+const dir = __dirname, root = path.join(dir, '..'), shots = path.join(dir, 'shots'); fs.mkdirSync(shots, { recursive: true });
+const NM = p => path.join(dir, 'node_modules', p);
+let fails = 0; const check = (c, m) => { if (!c) { fails++; console.log('  FAIL:', m); } else console.log('  ok:', m); };
+const CDN = [[/katex\.min\.css/, NM('katex/dist/katex.min.css'), 'text/css'], [/fonts\/(.+)$/, null, 'font/woff2'], [/katex\.min\.js/, NM('katex/dist/katex.min.js'), 'text/javascript'],
+  [/auto-render/, NM('katex/dist/contrib/auto-render.min.js'), 'text/javascript'], [/mqtt/, NM('mqtt/dist/mqtt.min.js'), 'text/javascript'], [/qrcode/, NM('qrcode-generator/qrcode.js'), 'text/javascript']];
+const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{id:'example',file:'example.js',active:true},{id:'ghost',file:'ghost.js',active:false}]);";
+(async () => {
+  const a = aedesF(); const bs = http.createServer().listen(9021, '127.0.0.1'); wsStream.createServer({ server: bs }, a.handle);
+  const server = http.createServer((req, res) => { let u = decodeURIComponent(req.url.split('?')[0]); if (u.endsWith('/')) u += 'index.html';
+    if (u === '/courses/courses.js') { res.setHeader('content-type', 'text/javascript'); return res.end(COURSES_BOTH); }
+    const f = path.join(root, u); if (!f.startsWith(root) || !fs.existsSync(f)) { res.statusCode = 404; return res.end('nf'); }
+    res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(f)); }).listen(8090, '127.0.0.1');
+  const B = 'http://127.0.0.1:8090/';
+  const b = await chromium.launch(); const errors = [];
+  const page = async (w, h) => { const p = await (await b.newContext({ viewport: { width: w || 1100, height: h || 900 } })).newPage();
+    p.on('pageerror', e => { if (!/Unexpected token/.test(e.message)) errors.push(e.message); }); p.on('console', m => { if (m.type() === 'error' && !/favicon|WebSocket|ERR_|404|ghost/.test(m.text())) errors.push(m.text()); });
+    await p.addInitScript(() => { window.SBQ_BROKERS = ['ws://127.0.0.1:9021/']; window.SBQ_STATS = 'http://127.0.0.1:1'; });
+    await p.route(/cdn\.jsdelivr\.net/, r => { const u = r.request().url(); for (const [re, f, t] of CDN) { const m = u.match(re); if (m) { const ff = f || NM('katex/dist/fonts/' + m[1]); if (fs.existsSync(ff)) return r.fulfill({ body: fs.readFileSync(ff), contentType: t }); } } r.abort(); });
+    return p; };
+
+  console.log('PICKER');
+  const p = await page(); await p.goto(B); await p.waitForSelector('[data-act=pickcourse]');
+  const cs = await p.$$eval('[data-act=pickcourse] b', e => e.map(x => x.textContent)); check(cs.join() === 'Systems Biology,Example course', 'picker lists both active courses: ' + cs);
+  await p.screenshot({ path: path.join(shots, 'm-picker.png') });
+  await p.click('[data-act=pickcourse][data-arg=example]'); await p.waitForSelector('.hero');
+  check(/Example course/.test(await p.innerText('.hero')) && /course=example/.test(p.url()), 'picked course: title + ?course=example');
+  await p.click('[data-act=practice]'); const chips = await p.$$eval('[data-act=pchip] b', e => e.map(x => x.textContent));
+  check(chips.length === 3 && /Exam practice/.test(chips[2]) && /Lecture 1/.test(chips[0]), 'lecture labels incl. plain one: ' + chips.join(' | '));
+  await p.selectOption('#nq', '0'); await p.click('[data-act=pstart]');
+  for (let i = 0; i < 6; i++) { await p.waitForSelector('.opt'); await p.keyboard.press('a'); await p.keyboard.press('Enter'); await p.waitForSelector('.feedback'); if (i === 1) await p.screenshot({ path: path.join(shots, 'm-example-q.png'), fullPage: true }); await p.keyboard.press('Enter'); }
+  await p.waitForSelector('.big-score');
+  const keys = await p.evaluate(() => Object.keys(localStorage)); check(keys.includes('lq.example.progress') && !keys.includes('lq.sysbio.progress'), 'progress stored per course: ' + keys.join(','));
+  await p.goto(B + '?course=sysbio'); await p.waitForSelector('.hero'); check(/Systems Biology/.test(await p.innerText('.hero')), 'direct link ?course=sysbio');
+  await p.goto(B + '?course=ghost'); await p.waitForSelector('.banner'); check(/not available/.test(await p.innerText('.banner')), 'inactive course link shows a notice');
+
+  console.log('LIVE (course comes with the room)');
+  const host = await page(1400, 900); await host.goto(B + '?course=example#host'); await host.waitForFunction(() => /Room online/.test((document.getElementById('hstat') || {}).textContent || ''), null, { timeout: 15000 });
+  const code = (await host.$eval('.code', e => e.textContent)).trim();
+  await host.click('[data-act=hsetup]'); await host.waitForSelector('.modal.setup');
+  check((await host.$$('[data-act=hcourse]')).length === 2, 'setup panel offers the course switch');
+  await host.click('.modal [data-act=hsetupdone]');
+  const st = await page(390, 800); await st.goto(B + '?join=' + code); await st.waitForSelector('.card.wait h2');
+  await host.click('[data-act=hnext]'); await host.waitForSelector('.pm .qtext');
+  await st.waitForSelector('.qtext', { timeout: 10000 }); const sq = await st.innerText('.qtext'), hq = await host.innerText('.pm .qtext');
+  check(sq === hq, 'student shows the presenter\'s example-course question: ' + sq.slice(0, 40));
+  await st.click('.opt >> nth=0'); await st.click('[data-act=lsubmit]'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '1', null, { timeout: 8000 }); check(true, 'answer counted');
+  await host.keyboard.press('Space'); await st.waitForSelector('.feedback.ok, .feedback.bad', { timeout: 8000 }); check(true, 'reveal reached student');
+  check(!!(await host.evaluate(() => localStorage.getItem('lq.example.host'))), 'host state stored per course');
+
+  console.log('STATS');
+  const s2 = await page(); await s2.goto(B + '?course=example#stats'); await s2.waitForSelector('.st-tiles');
+  check(/Example course/.test(await s2.innerText('h1')) && (await s2.$$('a.seg')).length === 2, 'stats page per course with course switch');
+
+  console.log('CHECK PAGE');
+  const c = await page(1100, 900); await c.goto(B + '#check'); await c.waitForSelector('#dz');
+  const rows = await c.$$eval('.st-tbl tr', r => r.slice(1).map(x => x.innerText.replace(/\s+/g, ' ')));
+  check(rows.length === 3 && /ghost/.test(rows[2]), 'site table lists the 3 entries of courses.js');
+  await c.setInputFiles('#ckfile', path.join(root, 'courses', 'example.js')); await c.waitForSelector('#ckout h2');
+  check(/No problems found/.test(await c.innerText('#ckout')) && (await c.$$('#ckout .card')).length >= 7, 'example.js: no problems, all questions previewed');
+  await c.screenshot({ path: path.join(shots, 'm-check-ok.png') });
+  const bad1 = path.join(shots, 'bad1.js'); fs.writeFileSync(bad1, "QUIZ.course('bad', ({r}) => ({ title:'Bad', lectures:{1:'A'}, questions:[ {id:'B1', lec:2, diff:4, topic:'t', q:r`If $x<y$ then`, opts:[r`a`, r`a`], exp:r`$x`}, {id:'B1', lec:1, diff:1, topic:'t', q:'q', opts:['a','b'], exp:'e', fig:{x:[0,1], y:[0,1], curves:[{fn:'-(x-1)**2'}]}} ] }));");
+  await c.setInputFiles('#ckfile', bad1); await c.waitForFunction(() => /problem/.test(document.getElementById('ckout').innerText));
+  const t1 = await c.innerText('#ckout'); const wanted = ['not in lectures', 'diff must be', 'duplicate options', 'unbalanced', 'HTML tag', 'duplicate id', 'does not parse'];
+  check(wanted.every(w => t1.includes(w)), 'broken course: all 7 problems reported (' + wanted.filter(w => !t1.includes(w)).join(',') + ')');
+  await c.screenshot({ path: path.join(shots, 'm-check-bad.png'), fullPage: false });
+  const bad2 = path.join(shots, 'bad2.js'); fs.writeFileSync(bad2, "QUIZ.course('x', () => ({ title:'X', questions:[ { id:'a' ]}));");
+  await c.setInputFiles('#ckfile', bad2); await c.waitForFunction(() => /JavaScript error/.test(document.getElementById('ckout').innerText));
+  check(true, 'syntax error reported: ' + (await c.innerText('#ckout .banner')).slice(0, 80));
+
+  console.log('\nerrors:', errors.length); errors.slice(0, 10).forEach(e => console.log('  ', e));
+  check(errors.length === 0, 'no page errors');
+  console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
+  await b.close(); server.close(); process.exit(fails ? 1 : 0);
+})().catch(e => { console.error('CRASH', e); process.exit(2); });

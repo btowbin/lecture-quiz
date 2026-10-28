@@ -1,0 +1,17 @@
+{
+  "name": "lecture-quiz-dev",
+  "private": true,
+  "description": "App build + tests for lecture-quiz (not needed for adding courses).",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node test.js && node test-multi.js"
+  },
+  "devDependencies": {
+    "aedes": "0.51.3",
+    "katex": "0.16.9",
+    "mqtt": "5.10.1",
+    "playwright": "^1.40.0",
+    "qrcode-generator": "1.4.4",
+    "websocket-stream": "5.5.2"
+  }
+}
