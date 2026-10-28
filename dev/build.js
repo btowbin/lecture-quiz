@@ -3,6 +3,7 @@
 const fs = require('fs'), path = require('path');
 const dir = __dirname;
 const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-const out = fs.readFileSync(path.join(dir, 'app.html'), 'utf8').replace('__BUILD__', stamp);
+const poll = fs.readFileSync(path.join(dir, 'poll.js'), 'utf8');
+const out = fs.readFileSync(path.join(dir, 'app.html'), 'utf8').replace('// __POLL__', () => poll).replace('__BUILD__', stamp);
 fs.writeFileSync(path.join(dir, '..', 'index.html'), out);
 console.log('wrote index.html, version', stamp);

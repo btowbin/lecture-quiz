@@ -38,6 +38,10 @@ Rules that keep questions good: every question must make sense on its own (they 
 
 A small **Lecturer** link at the bottom of the start pages asks for the password and opens a menu with the presenter view and statistics of every course and the course checker (the direct links `…#host`, `…#stats`, `…#check`, `…#lecturer` ask for it too). The login is remembered per browser; *Log out* is in the menu. It is a light barrier, not real security: the page is public and the password hash is readable in the code. Change it with `node dev/set-password.js "<new password>"` (then commit and push `index.html` and `dev/app.html`); an empty password `""` switches it off.
 
+## Instant polls
+
+*Lecturer → Instant poll* (or `…/#poll`) lets you ask a question on the spot, independent of any course. Create a **class** once (e.g. "Systems Biology Mon"): it gets its own permanent room code and QR code, kept in your browser, so students can come back to the same room every week and just see the next question without scanning again. Three types: **Choice** (type the answers, or leave them empty so students simply vote A, B, C… — 2 to 8 answers), **Number** (students type a number; the reveal shows a histogram with mean and median) and **Word / phrase** (the reveal shows a word cloud; "Gene" and "gene" count as one). Students can change their answer until you reveal. Keys: Space = reveal / next, N = new poll, Q = QR code, F = fullscreen. *Download all results (CSV)* is in the compose screen. The student page can be English or German (EN/DE switch per class). Poll results are stored only in the browser of the presenter computer.
+
 ## Running a live session
 
 1. Open `…/?course=<id>#host` on the lecture computer. A QR code and a room code appear; the room code is remembered, so the QR code can stay on your slides.
@@ -49,4 +53,4 @@ Live messages travel through two free public MQTT brokers (HiveMQ, EMQX): no acc
 
 ## For app changes (Claude / developers)
 
-The app source is `dev/app.html`; `node dev/build.js` stamps the version and writes `index.html`. Tests: `cd dev && npm install && npx playwright install chromium && node test.js && node test-multi.js` (`test.js` covers practice through all Systems Biology questions + live mode with 7 students on local brokers; `test-multi.js` covers course picker, per-course storage, live course switching and the check page). Settings at the top of the script: `TITLE`, `COURSE_DIR`, `BROKERS`, `TOPIC_PREFIX`, `STATS_URL`, `STATS_NS`. Helpers available in course files: `r` (raw text), `ffl()` (feed-forward-loop diagram), `table()`.
+The app source is `dev/app.html` (+ `dev/poll.js` for instant polls); `node dev/build.js` stamps the version and writes `index.html`. Tests: `cd dev && npm install && npx playwright install chromium && node test.js && node test-multi.js` (`test.js` covers practice through all Systems Biology questions + live mode with 7 students on local brokers; `test-multi.js` covers course picker, per-course storage, live course switching and the check page). Settings at the top of the script: `TITLE`, `COURSE_DIR`, `BROKERS`, `TOPIC_PREFIX`, `STATS_URL`, `STATS_NS`. Helpers available in course files: `r` (raw text), `ffl()` (feed-forward-loop diagram), `table()`.

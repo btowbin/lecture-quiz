@@ -66,6 +66,8 @@ Only in `dev/app.html`; then `cd dev; npm install; npx playwright install chromi
 
 - **Lecturer password:** `#host`, `#stats`, `#check`, `#lecturer` (menu behind the small "Lecturer" link on the start pages) need it (`LECTURER_HASH` in `dev/app.html`; change with `node dev/set-password.js "<pw>"`; tests disable it via `window.SBQ_LECT_HASH=''`). Client-side only — a light barrier.
 
+- **Instant polls** (`#poll`, behind the Lecturer menu): source in `dev/poll.js`, inlined into `index.html` by `node dev/build.js` at the `// __POLL__` marker in `dev/app.html`. Classes in `lq.polls`, per-class data in `lq.poll.<id>` (presenter browser). Room state has `kind:'poll'`; student answers `{sid,qid,v}` on the usual topics. Tested in `test-multi.js` (INSTANT POLLS).
+
 ## Pitfalls
 - Change not visible → push did not run, Pages still deploying, or cache: `git status` "up to date with origin", Actions tab green, private window.
 - Course missing → `active:false`, id mismatch between `courses.js` and `QUIZ.course(...)`, or a JS error (see `#check`).

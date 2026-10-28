@@ -101,6 +101,44 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   await nv.click('[data-act=lecturer]'); await on('[data-act=lcheck]');
   await nv.click('[data-act=lcheck]'); await on('#dz'); await nv.click('[data-act=back]'); await on('[data-act=lhost]'); check(true, 'Back from the checker returns to the lecturer menu');
   await nv.click('[data-act=lhost][data-arg=example]'); await nv.waitForFunction(() => document.querySelector('.lobby') !== null, null, { timeout: 15000 }); await nv.click('.ph [data-act=back]'); await on('[data-act=lhost]'); check(true, 'Back from the presenter lobby returns to the menu');
+  console.log('INSTANT POLLS');
+  const pph = await page(1300, 900); await pph.goto(B + '#poll'); await pph.waitForSelector('#plname');
+  await pph.fill('#plname', 'Test class'); await pph.click('[data-act=plnewclass]'); await pph.waitForSelector('#plq');
+  const pcode = (await pph.innerText('.lobby .code')).trim(); check(/^[A-Z0-9]{5}$/.test(pcode), 'class gets a room code: ' + pcode);
+  await pph.screenshot({ path: path.join(shots, 'm-poll-compose.png') });
+  await pph.waitForFunction(() => /Room online/.test((document.getElementById('hstat') || {}).textContent || ''), null, { timeout: 15000 });
+  const ps1 = await page(390, 800), ps2 = await page(390, 800);
+  for (const sp of [ps1, ps2]) { await sp.goto(B + '?join=' + pcode); await sp.waitForSelector('.card.wait h2'); }
+  await pph.waitForFunction(() => +document.querySelector('[data-hc]').textContent >= 2, null, { timeout: 15000 }); check(true, 'two students connected to the poll room');
+  // 1) choice with blank options
+  await pph.fill('#plq', 'Which?'); await pph.click('[data-act=plstart]');
+  for (const sp of [ps1, ps2]) await sp.waitForSelector('button.opt', { timeout: 10000 });
+  check((await ps1.$$('button.opt')).length === 4 && (await ps1.innerText('.qtext')).includes('Which?'), 'students see the question with A-D buttons');
+  await ps1.click('[data-act=plsel][data-arg="2"]'); await ps1.click('[data-act=plsend]'); await ps2.click('[data-act=plsel][data-arg="0"]'); await ps2.click('[data-act=plsend]');
+  await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 }); check(true, 'host counts 2 answers');
+  await ps1.click('[data-act=plsel][data-arg="1"]'); await ps1.click('[data-act=plsend]'); await ps1.waitForSelector('.feedback'); // change of mind
+  await pph.click('[data-act=plreveal]'); await ps1.waitForSelector('.opt.stat', { timeout: 10000 });
+  const hostOpts = await pph.$$eval('.pm .opt .cnt', e => e.map(x => x.textContent)); check(hostOpts.join() === '1 · 50%,1 · 50%,0 · 0%,0 · 0%', 'host shows the distribution (changed answer counted once): ' + hostOpts);
+  check(/Your answer/.test(await ps1.innerText('.card')), 'student sees result and own answer');
+  // 2) number
+  await pph.click('[data-act=plnew]'); await pph.waitForSelector('#plq'); await pph.click('[data-act=pltype][data-arg=num]'); await pph.fill('#plq', 'How many?'); await pph.click('[data-act=plstart]');
+  for (const sp of [ps1, ps2]) await sp.waitForSelector('#pin', { timeout: 10000 });
+  await ps1.fill('#pin', '5,5'); await ps1.click('[data-act=plsend]'); await ps2.fill('#pin', '3'); await ps2.press('#pin', 'Enter');
+  await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 });
+  await pph.click('[data-act=plreveal]'); await pph.waitForSelector('.hist', { timeout: 5000 }); await ps2.waitForSelector('.hist', { timeout: 10000 });
+  check(/mean\s*4\.25/.test((await pph.innerText('.hstats')).replace(/\n/g, ' ')), 'number poll: histogram with mean 4.25: ' + (await pph.innerText('.hstats')).replace(/\n/g, ' '));
+  // 3) word cloud
+  await pph.click('[data-act=plnew]'); await pph.waitForSelector('#plq'); await pph.click('[data-act=pltype][data-arg=word]'); await pph.fill('#plq', 'One word?'); await pph.click('[data-act=plstart]');
+  for (const sp of [ps1, ps2]) await sp.waitForSelector('#pin', { timeout: 10000 });
+  await ps1.fill('#pin', 'Gene'); await ps1.click('[data-act=plsend]'); await ps2.fill('#pin', ' gene '); await ps2.click('[data-act=plsend]');
+  await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 });
+  await pph.click('[data-act=plreveal]'); await pph.waitForSelector('.wcloud .wc', { timeout: 5000 }); await ps1.waitForSelector('.wcloud .wc', { timeout: 10000 });
+  const words = await pph.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title)); check(words.join() === 'Gene:2×', 'word cloud merges Gene / gene: ' + words);
+  await pph.screenshot({ path: path.join(shots, 'm-poll-cloud.png') }); await ps1.screenshot({ path: path.join(shots, 'm-poll-student.png') });
+  // persistence: same room code after reload
+  await pph.goto(B + '#poll'); await pph.reload(); await pph.waitForSelector('[data-act=plopen]'); await pph.click('[data-act=plopen]'); await pph.waitForSelector('.lobby .code, .pf .info b', { timeout: 10000 });
+  check((await pph.innerText('body')).includes(pcode), 'same room code after reload (stable QR per class)');
+  await pph.goto(B + '?course=sysbio'); await pph.waitForSelector('.hero');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });

@@ -261,6 +261,27 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 .qli .tp{flex:1}
 .qli .st{flex:none;font-size:.82rem;color:var(--muted)}
 .hide-cursor{cursor:none}
+/* instant polls */
+.pin{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit;resize:vertical}
+.pin:focus{outline:2px solid var(--accent);border-color:transparent}
+.pin.big{font-size:1.25rem;padding:14px 16px}
+.popts{display:grid;gap:8px}
+.popt{display:flex;gap:10px;align-items:center}
+.popt .k{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--bg);font-weight:800;font-size:.9rem;border:1px solid var(--line)}
+.popt input{flex:1;min-width:0;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;font:inherit}
+.hist{display:flex;gap:4px;align-items:flex-end;height:clamp(140px,34vh,420px);margin:18px 0 6px;border-bottom:2px solid var(--line)}
+.hb{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;padding-bottom:1.6em}
+.hbar{width:100%;background:var(--accent);opacity:.78;border-radius:6px 6px 0 0;min-height:2px;transition:height .5s}
+.hbar.mine{background:var(--ok);opacity:1}
+.hv{font-weight:700;font-variant-numeric:tabular-nums;font-size:.9em;margin-bottom:2px}
+.hl{position:absolute;bottom:0;font-size:.78em;color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.hstats{display:flex;gap:6px 22px;flex-wrap:wrap;margin-top:12px;color:var(--muted)} .hstats b{color:var(--ink)}
+.wcloud{display:flex;flex-wrap:wrap;gap:.1em .5em;justify-content:center;align-items:center;line-height:1.15;padding:14px 4px;font-weight:700;font-size:clamp(18px,2.6vw,40px)}
+.pm .wcloud{font-size:clamp(20px,3.2vw,56px)}
+.wc{white-space:nowrap}
+.wc.mine{text-decoration:underline;text-decoration-thickness:3px}
+.pollm{grid-template-columns:1fr}
+
 </style>
 </head>
 <body>
@@ -603,15 +624,16 @@ window.addEventListener('popstate', e=>{
   route = h.r.name==='practice' ? {name:'practice', stage:'setup'} : h.r;
   render(); window.scrollTo(0,0);
 });
-function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
+function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='poll') pollLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
 function bootRoute(){ bootRoute0(); const st=hstate(), cur=remember(); history.replaceState({k:cur.k,d:st?st.d||0:0},'',location.pathname+location.search+location.hash); }
 function bootRoute0(){
   const qs = new URLSearchParams(location.search), act = activeCourses(), want = qs.get('course');
-  if(!qs.get('join') && !/^#(host|stats|check|lecturer)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
+  if(!qs.get('join') && !/^#(host|stats|check|lecturer|poll)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
   if(want && !useCourse(want)) { route={name:'courses', missing:want}; render(); return; }
   if(!COURSE && act.length===1) useCourse(act[0].id);
   if(location.hash==='#check') { route={name:'check'}; render(); return; }
   if(location.hash==='#lecturer') { route={name:'lecturer'}; render(); return; }
+  if(location.hash==='#poll') { route={name:'poll'}; render(); return; }
   if(qs.get('join')) { route={name:'live', code:qs.get('join').toUpperCase().replace(/[^A-Z0-9]/g,'')}; render(); return; }
   if(!COURSE && (location.hash==='#host' || location.hash==='#stats')){ const last=LS.get('lq.lastcourse',null); if(last && useCourse(last)){} else if(act.length) useCourse(act[0].id); }
   if(!COURSE) { route={name:'courses'}; render(); return; }
@@ -624,7 +646,7 @@ function bootRoute0(){
 }
 function render(){
   document.body.classList.remove('hide-cursor');
-  if((route.name==='host'||route.name==='stats'||route.name==='check'||route.name==='lecturer') && !lecturerOK()){ viewLogin(); return; }
+  if((route.name==='host'||route.name==='stats'||route.name==='check'||route.name==='lecturer'||route.name==='poll') && !lecturerOK()){ viewLogin(); return; }
   if(route.name==='home') viewHome();
   else if(route.name==='practice') viewPractice();
   else if(route.name==='live') viewLive();
@@ -633,6 +655,7 @@ function render(){
   else if(route.name==='courses') viewCourses();
   else if(route.name==='check') viewCheck();
   else if(route.name==='lecturer') viewLecturer();
+  else if(route.name==='poll') viewPoll();
 }
 function header(extra){
   const back = (route.name!=='home' && route.name!=='courses') ? '<button class="btn ghost back" data-act="back" title="'+T('Back')+'">'+T('← Back')+'</button>' : (COURSE && route.name==='home' && activeCourses().length>1 ? '<button class="btn ghost back" data-act="allcourses" title="'+T('Back to the list of courses')+'">'+T('← All courses')+'</button>' : '');
@@ -672,6 +695,7 @@ function viewLecturer(){
   const act=activeCourses();
   const rows=act.map(c=>'<div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0"><b style="flex:1 1 180px">'+esc(c.title)+'</b><button class="btn primary" data-act="lhost" data-arg="'+esc(c.id)+'">Presenter view</button><button class="btn" data-act="lstats" data-arg="'+esc(c.id)+'">Statistics</button></div>').join('');
   app.innerHTML='<div class="wrap" style="max-width:720px">'+header()+'<h1 style="margin-bottom:6px">Lecturer</h1><div class="card stack" style="margin-top:14px"><h2>Courses</h2>'+(rows||'<p class="muted">No active course.</p>')+'</div>'+
+    '<div class="card stack" style="margin-top:14px"><h2>Instant poll</h2><p class="muted small" style="margin:0">Ask a question on the spot — choice, number or word cloud — with a permanent QR code per class.</p><div class="row"><button class="btn primary" data-act="lpoll">Instant poll</button></div></div>'+
     '<div class="card stack" style="margin-top:14px"><h2>Tools</h2><div class="row"><button class="btn" data-act="lcheck">Check a course file</button></div></div>'+
     '<p class="muted small" style="margin-top:20px"><button class="link" data-act="lectback">← Back to the quiz</button>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+'</p></div>';
 }
@@ -681,6 +705,7 @@ Object.assign(ACTS, {
   lectback(){ ACTS.back(); },
   lhost(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'host'}, courseURL(id,'#host')); },
   lstats(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'stats'}, courseURL(id,'#stats')); },
+  lpoll(){ go({name:'poll'}, location.pathname+'#poll'); },
   lcheck(){ go({name:'check'}, location.pathname+'#check'); },
   async lectlogin(){
     const i=document.getElementById('lpw'), er=document.getElementById('lerr'); if(!i) return;
@@ -913,7 +938,7 @@ function studentState(m){
   const prevQ=S.st&&S.st.qid, prevPhase=S.st&&S.st.phase;
   if(m.rv!==S.rv){ if(S.rv!=null) S.mine={}; S.rv=m.rv; }        // lecturer cleared the answers
   m.mine = (m.qid && S.mine[m.qid]!=null) ? S.mine[m.qid] : null;
-  S.st=m; if(m.qid!==prevQ){ S.sel=null; S.pendingSince=0; window.scrollTo(0,0); }
+  S.st=m; if(m.qid!==prevQ){ S.sel=null; S.pdraft=''; S.perr=false; S.pendingSince=0; window.scrollTo(0,0); }
   if(m.mine!=null) S.pendingSince=0;
   studentPaint(m.qid!==prevQ || m.phase!==prevPhase);
 }
@@ -924,9 +949,10 @@ function studentPaint(full){
   let body='';
   const st=S.st;
   if(S.badCourse) body+='<div class="banner">The questions of this live quiz (course “'+esc(S.badCourse)+'”) are not available on this site. Ask your lecturer.</div>';
-  if(st && st.ver!==VER) body+='<div class="banner">Your page is out of date. Please reload it (pull down, or hard-refresh) to see the current question.</div>';
+  if(st && st.kind!=='poll' && st.ver!==VER) body+='<div class="banner">Your page is out of date. Please reload it (pull down, or hard-refresh) to see the current question.</div>';
   if(S.err && S.status!=='on') body+='<div class="banner warn">'+esc(S.err)+'</div>';
-  if(!st || !S.hostOn || st.phase==='lobby' || !COURSE || !byId[st.qid]){
+  if(st && st.kind==='poll' && S.hostOn){ body+=pollStudentBody(st); }
+  else if(!st || !S.hostOn || st.phase==='lobby' || !COURSE || !byId[st.qid]){
     body+='<div class="card wait"><div class="spin"></div><h2>'+T(S.status==='on'?'You’re in!':'Connecting…')+'</h2><p class="muted">'+(S.status==='on'?T('Waiting for the lecturer to start the next question…'):T('Room')+' '+esc(S.code)+'<br>'+T(S.stage===2?'Step 2 of 2: waiting for the lecturer’s page…':'Step 1 of 2: reaching the message service…'))+'</p></div>';
   } else {
     const q=byId[st.qid], ord=optOrder(q,''), cor=correctOf(q), mine=st.mine, locked=mine!=null || (S.pendingSince>0);
@@ -951,8 +977,10 @@ function studentPaint(full){
     }
     body+='<div class="card"><div class="qmeta">'+T('Question {0} of {1}',st.n,st.N)+' · '+esc(q.topic)+diffTag(q)+'</div><div class="qtext">'+q.q+'</div>'+figHTML(q)+'<div class="opts">'+opts+'</div>'+foot+'</div>';
   }
+  const hadPin=document.activeElement&&document.activeElement.id==='pin';
   app.innerHTML='<div class="wrap live">'+header('<span class="status"><i class="dot '+dotCls+'"></i>'+stxt+' · '+esc(S.code)+'</span>')+body+'<p class="muted small" style="margin-top:20px"><button class="link" data-act="home">'+T('Leave live quiz')+'</button> · version '+esc(BUILD)+'</p></div>';
   if(!st||full||true) typeset(app);
+  if(hadPin){ const pi=document.getElementById('pin'); if(pi){ pi.focus(); try{ pi.setSelectionRange(pi.value.length,pi.value.length); }catch(e){} } }
 }
 Object.assign(ACTS,{
   lsel(i){ if(!S||!S.st||S.st.phase!=='q'||S.st.mine!=null||S.pendingSince) return; S.sel=+i; studentPaint(); },
@@ -1248,6 +1276,8 @@ function setupHTML(){
   if(H.phase!=='lobby') h+='<p class="muted small" style="margin-top:12px">The session is running — changes apply to the remaining questions; collected answers are kept.</p>';
   return h;
 }
+
+// __POLL__
 
 /* ====================================================================
    STATISTICS  (#stats) — reads the anonymous Abacus counters
