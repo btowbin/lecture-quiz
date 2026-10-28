@@ -64,7 +64,7 @@ Only in `dev/app.html`; then `cd dev; npm install; npx playwright install chromi
 - Statistics keys: `visits`, `sessions.<course>`, `q.<course>.<qid>.n|.ok` (Abacus ~30 requests/10 s; keys expire after 6 months unused).
 - `test.js` uses Systems Biology ids (`L2-01`, `L2-05`, `L2-12`); `test-multi.js` serves two active courses and tests picker, per-course storage, live course switching, statistics and the check page.
 
-- **Lecturer password:** `#host`, `#stats`, `#check` need it (`LECTURER_HASH` in `dev/app.html`; change with `node dev/set-password.js "<pw>"`; tests disable it via `window.SBQ_LECT_HASH=''`). Client-side only — a light barrier.
+- **Lecturer password:** `#host`, `#stats`, `#check`, `#lecturer` (menu behind the small "Lecturer" link on the start pages) need it (`LECTURER_HASH` in `dev/app.html`; change with `node dev/set-password.js "<pw>"`; tests disable it via `window.SBQ_LECT_HASH=''`). Client-side only — a light barrier.
 
 ## Pitfalls
 - Change not visible → push did not run, Pages still deploying, or cache: `git status` "up to date with origin", Actions tab green, private window.

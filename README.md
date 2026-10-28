@@ -36,7 +36,7 @@ Rules that keep questions good: every question must make sense on its own (they 
 
 ## Lecturer password
 
-Presenter view, practice statistics and the course checker ask for a password; students see no links to them. Open the links directly (bookmark them) and log in once per browser (*Log out* is at the bottom of the start page). It is a light barrier, not real security: the page is public and the password hash is readable in the code. Change it with `node dev/set-password.js "<new password>"` (then commit and push `index.html` and `dev/app.html`); an empty password `""` switches it off.
+A small **Lecturer** link at the bottom of the start pages asks for the password and opens a menu with the presenter view and statistics of every course and the course checker (the direct links `…#host`, `…#stats`, `…#check`, `…#lecturer` ask for it too). The login is remembered per browser; *Log out* is in the menu. It is a light barrier, not real security: the page is public and the password hash is readable in the code. Change it with `node dev/set-password.js "<new password>"` (then commit and push `index.html` and `dev/app.html`); an empty password `""` switches it off.
 
 ## Running a live session
 

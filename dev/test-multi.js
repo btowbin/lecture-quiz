@@ -82,8 +82,13 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   await lk.fill('#lpw', 'wrong'); await lk.click('[data-act=lectlogin]'); await lk.waitForFunction(() => /Wrong/.test(document.getElementById('lerr').textContent)); check(true, 'wrong password rejected');
   await lk.fill('#lpw', 'Towbin-Lecturer'); await lk.click('[data-act=lectlogin]'); await lk.waitForSelector('#dz'); check(true, 'correct password opens the checker');
   await lk.goto(B + '?course=sysbio#stats'); await lk.reload(); await lk.waitForSelector('.st-tiles'); check(true, 'stays unlocked on this browser');
-  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero'); check(/presenter view/i.test(await lk.innerText('body')), 'lecturer links visible after login');
-  await lk.click('[data-act=lectout]'); await lk.waitForSelector('.hero'); check(!/presenter view/i.test(await lk.innerText('body')), 'log out hides them again');
+  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero'); await lk.click('[data-act=lecturer]'); await lk.waitForSelector('[data-act=lhost]'); check(/Presenter view/.test(await lk.innerText('body')), 'Lecturer button opens the menu when logged in');
+  await lk.click('[data-act=lstats][data-arg=example]'); await lk.waitForSelector('.st-tiles'); check(true, 'menu -> statistics of a course');
+  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero'); await lk.click('[data-act=lecturer]'); await lk.waitForSelector('[data-act=lcheck]'); await lk.click('[data-act=lcheck]'); await lk.waitForSelector('#dz'); check(true, 'menu -> course checker');
+  await lk.goto(B + '?course=sysbio'); await lk.waitForSelector('.hero'); await lk.click('[data-act=lecturer]'); await lk.waitForSelector('[data-act=lectout]'); await lk.click('[data-act=lectout]'); await lk.waitForSelector('.hero');
+  await lk.click('[data-act=lecturer]'); await lk.waitForSelector('#lpw'); check(true, 'Lecturer button asks for the password after log out');
+  await lk.fill('#lpw', 'Towbin-Lecturer'); await lk.click('[data-act=lectlogin]'); await lk.waitForSelector('[data-act=lhost]'); await lk.click('[data-act=lhost][data-arg=example]');
+  await lk.waitForFunction(() => /Room online/.test((document.getElementById('hstat') || {}).textContent || ''), null, { timeout: 15000 }); check(true, 'login from the button -> menu -> presenter view');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });

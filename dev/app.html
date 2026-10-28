@@ -588,10 +588,11 @@ function go(r){ cleanup(); route=r; render(); window.scrollTo(0,0); }
 function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
 function bootRoute(){
   const qs = new URLSearchParams(location.search), act = activeCourses(), want = qs.get('course');
-  if(!qs.get('join') && !/^#(host|stats|check)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
+  if(!qs.get('join') && !/^#(host|stats|check|lecturer)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
   if(want && !useCourse(want)) { route={name:'courses', missing:want}; render(); return; }
   if(!COURSE && act.length===1) useCourse(act[0].id);
   if(location.hash==='#check') { route={name:'check'}; render(); return; }
+  if(location.hash==='#lecturer') { route={name:'lecturer'}; render(); return; }
   if(qs.get('join')) { route={name:'live', code:qs.get('join').toUpperCase().replace(/[^A-Z0-9]/g,'')}; render(); return; }
   if(!COURSE && (location.hash==='#host' || location.hash==='#stats')){ const last=LS.get('lq.lastcourse',null); if(last && useCourse(last)){} else if(act.length) useCourse(act[0].id); }
   if(!COURSE) { route={name:'courses'}; render(); return; }
@@ -604,7 +605,7 @@ function bootRoute(){
 }
 function render(){
   document.body.classList.remove('hide-cursor');
-  if((route.name==='host'||route.name==='stats'||route.name==='check') && !lecturerOK()){ viewLogin(); return; }
+  if((route.name==='host'||route.name==='stats'||route.name==='check'||route.name==='lecturer') && !lecturerOK()){ viewLogin(); return; }
   if(route.name==='home') viewHome();
   else if(route.name==='practice') viewPractice();
   else if(route.name==='live') viewLive();
@@ -612,6 +613,7 @@ function render(){
   else if(route.name==='stats') viewStats();
   else if(route.name==='courses') viewCourses();
   else if(route.name==='check') viewCheck();
+  else if(route.name==='lecturer') viewLecturer();
 }
 function header(extra){
   const back = COURSE && route.name!=='courses' && route.name!=='live' && activeCourses().length>1 ? '<button class="btn ghost back" data-act="allcourses" title="'+T('Back to the list of courses')+'">'+T('← All courses')+'</button>' : '';
@@ -646,7 +648,20 @@ function viewLogin(){
     '<div id="lerr" class="small" style="color:var(--bad);min-height:1.2em"></div></div></div>';
   const i=document.getElementById('lpw'); i.focus(); i.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.lectlogin(); });
 }
+function viewLecturer(){
+  document.title='Lecturer';
+  const act=activeCourses();
+  const rows=act.map(c=>'<div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0"><b style="flex:1 1 180px">'+esc(c.title)+'</b><button class="btn primary" data-act="lhost" data-arg="'+esc(c.id)+'">Presenter view</button><button class="btn" data-act="lstats" data-arg="'+esc(c.id)+'">Statistics</button></div>').join('');
+  app.innerHTML='<div class="wrap" style="max-width:720px">'+header()+'<h1 style="margin-bottom:6px">Lecturer</h1><div class="card stack" style="margin-top:14px"><h2>Courses</h2>'+(rows||'<p class="muted">No active course.</p>')+'</div>'+
+    '<div class="card stack" style="margin-top:14px"><h2>Tools</h2><div class="row"><button class="btn" data-act="lcheck">Check a course file</button></div></div>'+
+    '<p class="muted small" style="margin-top:20px"><button class="link" data-act="lectback">← Back to the quiz</button>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+'</p></div>';
+}
 Object.assign(ACTS, {
+  lecturer(){ history.replaceState(null,'',location.pathname+'#lecturer'); go({name:'lecturer'}); },
+  lectback(){ if(COURSE){ history.replaceState(null,'',courseURL(COURSE.id)); go({name:'home'}); } else { history.replaceState(null,'',location.pathname); go({name:'courses'}); } },
+  lhost(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); history.replaceState(null,'',courseURL(id,'#host')); go({name:'host'}); },
+  lstats(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); history.replaceState(null,'',courseURL(id,'#stats')); go({name:'stats'}); },
+  lcheck(){ history.replaceState(null,'',location.pathname+'#check'); go({name:'check'}); },
   async lectlogin(){
     const i=document.getElementById('lpw'), er=document.getElementById('lerr'); if(!i) return;
     if(!(window.crypto&&crypto.subtle)){ er.textContent='This browser cannot check passwords on an insecure connection (use https).'; return; }
@@ -666,7 +681,7 @@ function viewHome(){
     '<div class="card choice"><h2>'+T('Practise on your own')+'</h2><p>'+T('{0} questions across {1} topics. Pick lectures, get instant feedback and explanations. Your progress stays in this browser.',QUESTIONS.length,lecNums.length)+'</p><button class="btn primary big" data-act="practice">'+T('Start practising')+'</button></div>'+
     '<div class="card choice"><h2>'+T('Join the live quiz')+'</h2><p>'+T('Scan the QR code on the screen, or type the room code shown by your lecturer.')+'</p><div class="row"><input id="code" class="codein" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn primary big" data-act="joinGo">'+T('Join')+'</button></div></div>'+
   '</div>'+
-  '<p class="muted small" style="margin-top:28px">'+(lecturerOK()?T('Lecturer?')+' <button class="link" data-act="host">'+T('Open presenter view')+'</button> · <a class="link" href="'+courseURL(COURSE.id,'#stats')+'">'+T('Practice statistics')+'</a> · <a class="link" href="'+location.pathname+'#check">Check</a>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+(activeCourses().length>1?' · ':''):'')+(activeCourses().length>1?'<button class="link" data-act="allcourses">'+T('All courses')+'</button>':'')+'</p><p class="muted small">Version '+esc(BUILD)+'</p></div>';
+  '<p class="muted small" style="margin-top:28px">'+(activeCourses().length>1?'<button class="link" data-act="allcourses">'+T('All courses')+'</button> · ':'')+'<button class="link" data-act="lecturer">'+T('Lecturer')+'</button></p><p class="muted small">Version '+esc(BUILD)+'</p></div>';
   const inp=document.getElementById('code'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.joinGo(); });
 }
 
@@ -678,7 +693,7 @@ function viewCourses(){
     (route.missing ? '<div class="banner">The course “'+esc(route.missing)+'” is not available (not activated, or its file failed to load).</div>' : '')+
     (act.length ? '<div class="chips">'+cards+'</div>' : '<div class="card">No course is activated yet. Add a course file to <code>courses/</code> and switch it on in <code>courses/courses.js</code>.</div>')+
     '<div class="card choice" style="margin-top:20px"><h2>Join a live quiz</h2><p>Scan the QR code on the screen, or type the room code shown by your lecturer.</p><div class="row"><input id="code" class="codein" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn primary big" data-act="joinGo">Join</button></div></div>'+
-    '<p class="muted small" style="margin-top:28px">'+(lecturerOK()?'<a class="link" href="'+location.pathname+'#check">Check a course file</a>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+' · ':'')+'Version '+esc(BUILD)+'</p></div>';
+    '<p class="muted small" style="margin-top:28px"><button class="link" data-act="lecturer">Lecturer</button> · Version '+esc(BUILD)+'</p></div>';
   const inp=document.getElementById('code'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.joinGo(); });
 }
 
