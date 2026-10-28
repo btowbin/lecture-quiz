@@ -149,11 +149,27 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   await pph.click('[data-act=plnewnow]'); await pph.waitForSelector('#plq'); await pph.fill('#plq', 'Saved Q'); await pph.click('[data-act=plsaveprep]');
   await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 5, null, { timeout: 5000 }); check(true, 'Save for later adds the current question');
   await pph.click('.prow:last-child [data-act=plprepdel]'); await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 4, null, { timeout: 5000 }); check(true, 'prepared question can be deleted');
+  // lectures (folders) within a class
+  await pph.fill('#plfname', 'Lecture 1'); await pph.click('[data-act=plfoldernew]'); await pph.waitForSelector('.seg[data-act=plfolder]');
+  check(/No questions in this lecture/.test(await pph.innerText('body')), 'new lecture starts empty');
+  await pph.click('[data-act=plbulk]'); await pph.waitForSelector('#plbulk'); await pph.fill('#plbulk', '## Lecture 2\nA? | x | y\n#num B?'); await pph.click('[data-act=plbulkadd]');
+  await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 2, null, { timeout: 5000 });
+  const lchips = await pph.$$eval('.seg[data-act=plfolder]', e => e.map(x => x.textContent.replace(/\s+/g, ' ').trim())); check(lchips.join('|') === 'Lecture 1 0|Lecture 2 2|Unsorted 4', 'lecture chips with counts: ' + lchips.join('|'));
+  await pph.click('[data-act=plfolder][data-arg=""]'); await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 4, null, { timeout: 5000 }); check(true, 'Unsorted shows its 4 questions');
+  await pph.click('.seg[data-act=plfolder]:nth-child(2)'); await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 2, null, { timeout: 5000 });
+  await pph.click('.prow:first-child [data-act=plrun]'); await ps1.waitForSelector('button.opt', { timeout: 10000 }); await pph.click('[data-act=plreveal]'); await pph.waitForSelector('[data-act=plnextprep]');
+  check(/B\?/.test(await pph.innerText('[data-act=plnextprep]')), 'Next prepared stays within the lecture');
+  await pph.click('[data-act=plnew]'); await pph.waitForSelector('#plq');
   await pph.screenshot({ path: path.join(shots, 'm-poll-prepared.png') });
   // persistence: same room code after reload
   await pph.goto(B + '#poll'); await pph.reload(); await pph.waitForSelector('[data-act=plopen]'); await pph.click('[data-act=plopen]'); await pph.waitForSelector('.lobby .code, .pf .info b', { timeout: 10000 });
   check((await pph.innerText('body')).includes(pcode), 'same room code after reload (stable QR per class)');
-  await pph.click('[data-act=plnewnow]').catch(() => {}); await pph.waitForSelector('#plq', { timeout: 5000 }); check((await pph.$$('.prow')).length === 4, 'prepared questions survive a reload');
+  await pph.click('[data-act=plnew], [data-act=plnewnow]'); await pph.waitForSelector('#plq', { timeout: 5000 }); await pph.click('[data-act=plfolder][data-arg=""]'); await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 4, null, { timeout: 5000 }); check(true, 'prepared questions and lectures survive a reload');
+  await pph.click('[data-act=plclasses]'); await pph.waitForSelector('#plname'); await pph.fill('#plname', 'Second class'); await pph.click('[data-act=plnewclass]'); await pph.waitForSelector('#plq');
+  check((await pph.$$('.prow')).length === 0, 'a new class has its own (empty) prepared list');
+  await pph.click('[data-act=plcopyfrom]'); await pph.waitForFunction(() => document.querySelectorAll('.seg[data-act=plfolder]').length === 3, null, { timeout: 5000 });
+  const chips2 = await pph.$$eval('.seg[data-act=plfolder]', e => e.map(x => x.textContent.replace(/\s+/g, ' ').trim())); check(chips2.join('|') === 'Lecture 1 0|Lecture 2 2|Unsorted 4', 'copy from another class brings the lectures: ' + chips2.join('|'));
+
   await pph.goto(B + '?course=sysbio'); await pph.waitForSelector('.hero');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);
