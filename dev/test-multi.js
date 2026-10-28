@@ -135,9 +135,25 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   await pph.click('[data-act=plreveal]'); await pph.waitForSelector('.wcloud .wc', { timeout: 5000 }); await ps1.waitForSelector('.wcloud .wc', { timeout: 10000 });
   const words = await pph.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title)); check(words.join() === 'Gene:2×', 'word cloud merges Gene / gene: ' + words);
   await pph.screenshot({ path: path.join(shots, 'm-poll-cloud.png') }); await ps1.screenshot({ path: path.join(shots, 'm-poll-student.png') });
+  // prepared questions
+  pph.on('dialog', d => d.accept());
+  await pph.click('[data-act=plnew]'); await pph.waitForSelector('#plq'); await pph.click('[data-act=plbulk]'); await pph.waitForSelector('#plbulk');
+  await pph.fill('#plbulk', 'Pick one | Red | Green | Blue\n#num Age?\n#word Favourite gene?\nYes or no? | | '); await pph.click('[data-act=plbulkadd]');
+  await pph.waitForSelector('.prow'); check((await pph.$$('.prow')).length === 4, 'bulk add creates 4 prepared questions');
+  await pph.click('.prow:first-child [data-act=plrun]'); await ps1.waitForSelector('button.opt', { timeout: 10000 });
+  check(/Green/.test(await ps1.innerText('.opts')), 'one click starts a prepared question (answers appear on the phone)');
+  await ps1.click('[data-act=plsel][data-arg="1"]'); await ps1.click('[data-act=plsend]'); await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '1', null, { timeout: 10000 });
+  await pph.click('[data-act=plreveal]'); await pph.waitForSelector('[data-act=plnextprep]'); check(/Age\?/.test(await pph.innerText('[data-act=plnextprep]')), 'reveal offers the next prepared question');
+  await pph.click('[data-act=plnextprep]'); await ps1.waitForSelector('#pin', { timeout: 10000 }); check(/Age\?/.test(await ps1.innerText('.qtext')), 'next prepared question reaches the students');
+  await pph.click('[data-act=plprep]'); await pph.waitForSelector('.modal .prow'); check((await pph.$$('.modal .prow')).length === 4, 'Prepared list opens during a poll'); await pph.keyboard.press('Escape');
+  await pph.click('[data-act=plnewnow]'); await pph.waitForSelector('#plq'); await pph.fill('#plq', 'Saved Q'); await pph.click('[data-act=plsaveprep]');
+  await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 5, null, { timeout: 5000 }); check(true, 'Save for later adds the current question');
+  await pph.click('.prow:last-child [data-act=plprepdel]'); await pph.waitForFunction(() => document.querySelectorAll('.prow').length === 4, null, { timeout: 5000 }); check(true, 'prepared question can be deleted');
+  await pph.screenshot({ path: path.join(shots, 'm-poll-prepared.png') });
   // persistence: same room code after reload
   await pph.goto(B + '#poll'); await pph.reload(); await pph.waitForSelector('[data-act=plopen]'); await pph.click('[data-act=plopen]'); await pph.waitForSelector('.lobby .code, .pf .info b', { timeout: 10000 });
   check((await pph.innerText('body')).includes(pcode), 'same room code after reload (stable QR per class)');
+  await pph.click('[data-act=plnewnow]').catch(() => {}); await pph.waitForSelector('#plq', { timeout: 5000 }); check((await pph.$$('.prow')).length === 4, 'prepared questions survive a reload');
   await pph.goto(B + '?course=sysbio'); await pph.waitForSelector('.hero');
   console.log(fails ? fails + ' FAILED' : 'ALL CHECKS PASSED');
   await b.close(); server.close(); process.exit(fails ? 1 : 0);

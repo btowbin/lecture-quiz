@@ -281,6 +281,10 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 .wc{white-space:nowrap}
 .wc.mine{text-decoration:underline;text-decoration-thickness:3px}
 .pollm{grid-template-columns:1fr}
+.prow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)} .prow:first-child{border-top:0}
+.ptxt{flex:1;min-width:0} .ptxt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptxt .small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 
 </style>
 </head>
@@ -300,7 +304,7 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 /* ====================================================================
    SETTINGS  (edit here)
    ==================================================================== */
-const BUILD        = '2026-10-28 09:06';                // version stamp (shown at the bottom of the pages)
+const BUILD        = '2026-10-28 10:25';                // version stamp (shown at the bottom of the pages)
 const TITLE        = 'Lecture quizzes';          // site title (course picker); each course has its own title
 const COURSE_DIR   = 'courses/';                 // where courses.js and the course files live
 // LIVE MODE TRANSPORT: messages travel through free public MQTT brokers (MQTT over secure WebSocket, no account needed).
@@ -1284,8 +1288,9 @@ function setupHTML(){
    Same message service as the live quiz; the room state carries kind:'poll' and the current item.
    ==================================================================== */
 const PKEY='lq.polls', PVERS='poll1', PTYPES={choice:'Choice', num:'Number', word:'Word / phrase'};
-const pollStore = () => { const s=LS.get(PKEY,null); return (s&&Array.isArray(s.classes))?s:{classes:[],last:null}; };
+const pollStore = () => { const s=LS.get(PKEY,null); const o=(s&&Array.isArray(s.classes))?s:{classes:[],last:null}; if(!Array.isArray(o.prepared)) o.prepared=[]; if(!Array.isArray(o.folders)) o.folders=[]; return o; };
 const pollStoreSave = s => LS.set(PKEY,s);
+const prepSave = () => pollSave();
 let P=null;
 const PSTR={
   en:{wait:'Waiting for the next poll…', in:'You’re in!', poll:'Poll', send:'Send', upd:'Update answer', sent:'✓ Answer received — you can still change it until the results are shown.', num:'Enter a number', word:'Your word or short phrase', res:'Results', mine:'Your answer', n:'answers', none:'No answer submitted', mean:'mean', median:'median', empty:'No answers yet.', bad:'Please enter a number.'},
@@ -1346,12 +1351,14 @@ function pollOpen(id){
   const d=LS.get('lq.poll.'+id,null)||{};
   P={ id, name:c.name, code:c.code, lang:c.lang||'en', items:Array.isArray(d.items)?d.items:[], cur:d.cur||null, phase:d.phase||'lobby', rv:d.rv||1,
       draft:Object.assign({type:'choice', q:'', n:4, opts:[]}, d.draft||{}), pres:new Map(), cls:[], ui:{compose:false, overlay:null}, dead:false, status:'connecting' };
+  P.prep=Object.assign({prepared:[],folders:[],pfolder:null}, d.prep||{}); if(!Array.isArray(P.prep.prepared)) P.prep.prepared=[]; if(!Array.isArray(P.prep.folders)) P.prep.folders=[];
+  if(!d.prep && (st.prepared.length||st.folders.length)){ P.prep.prepared=st.prepared; P.prep.folders=st.folders; P.prep.pfolder=st.pfolder||null; st.prepared=[]; st.folders=[]; delete st.pfolder; }   // earlier global list moves into the first class opened
   if(P.cur && !P.items.find(x=>x.id===P.cur)){ P.cur=null; P.phase='lobby'; }
   P.ui.compose=!P.cur;
   st.last=id; pollStoreSave(st);
   pollConnect(); P.cntT=setInterval(pollCount,5000); pollPaint();
 }
-function pollSave(){ if(!P) return; const items=P.items.slice(-300); LS.set('lq.poll.'+P.id,{items, cur:P.cur, phase:P.phase, rv:P.rv, draft:P.draft}); }
+function pollSave(){ if(!P) return; const items=P.items.slice(-300); LS.set('lq.poll.'+P.id,{items, cur:P.cur, phase:P.phase, rv:P.rv, draft:P.draft, prep:P.prep}); }
 let psaveT; function pollSaveSoon(){ clearTimeout(psaveT); psaveT=setTimeout(pollSave,400); }
 const pollItem = () => P&&P.cur ? P.items.find(x=>x.id===P.cur)||null : null;
 const pollURL = () => location.origin+location.pathname+'?join='+P.code;
@@ -1423,7 +1430,7 @@ function pollStatus(){
 function pollPaint(){
   if(route.name!=='poll') return;
   if(!P) return pollPickerPaint();
-  const it=pollItem(), url=pollURL(); let html;
+  const it=pollItem(), url=pollURL(), pst=P.prep, prepList=pst.prepared, pcur=curFolder(pst), shown=folderItems(pst,pcur); let html;
   const bar=(left)=>'<div class="ph">'+left+'<span class="sp"></span><span id="hstat" class="status"></span><button class="btn ghost" data-act="theme" aria-label="Toggle theme">'+THEME_ICON+'</button></div>';
   if(P.ui.compose || !it){
     const d=P.draft, n=Math.max(2,Math.min(8,d.n||4));
@@ -1440,11 +1447,12 @@ function pollPaint(){
       '<textarea id="plq" data-pl="q" rows="2" class="pin" placeholder="Question (optional – you can also just ask it aloud)">'+esc(d.q||'')+'</textarea>'+
       (d.type==='choice'?'<div class="row small muted" style="gap:8px">Number of answers '+chips+'</div><div class="popts">'+ins+'</div><div class="muted small">Leave the answer texts empty to let students simply vote A, B, C…</div>'
         : '<div class="muted small">'+(d.type==='num'?'Students type a number; the reveal shows the distribution.':'Students type a word or short phrase; the reveal shows a word cloud.')+'</div>')+
-      '<div class="row"><button class="btn primary big" data-act="plstart">Start poll ▶</button>'+(it?'<button class="btn" data-act="plcancel">Back to the current poll</button>':'')+'<span class="muted small">Enter in the question field also starts</span></div></div>'+
+      '<div class="row"><button class="btn primary big" data-act="plstart">Start poll ▶</button><button class="btn" data-act="plsaveprep" title="Keep this question in the prepared list">'+(P.editing?'Save changes':'☆ Save for later')+'</button>'+(pst.folders.length?'<select id="plfsel" aria-label="Lecture" title="Lecture">'+pst.folders.map(f=>'<option value="'+esc(f.id)+'"'+((P.editing?foldOf(pst,pst.prepared.find(y=>y.id===P.editing)||{}):pcur)===f.id?' selected':'')+'>'+esc(f.name)+'</option>').join('')+'<option value=""'+((P.editing?foldOf(pst,pst.prepared.find(y=>y.id===P.editing)||{}):pcur)===''?' selected':'')+'>Unsorted</option></select>':'')+(P.editing?'<button class="btn ghost" data-act="plprepcancel">Cancel edit</button>':'')+(it?'<button class="btn" data-act="plcancel">Back to the current poll</button>':'')+'<span class="muted small">Enter in the question field also starts</span></div>'+(P.msg?'<div class="small" style="color:var(--ok)">'+esc(P.msg)+'</div>':'')+'</div>'+
+      '<div class="card stack"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Prepared questions <span class="muted small">('+prepList.length+')</span></h2><button class="btn" data-act="plbulk">Add several…</button></div>'+copyBar()+folderBar(pst,pcur,true)+(shown.length?'<div>'+shown.map(x=>prepRow(x,true)).join('')+'</div>':'<p class="muted small" style="margin:0">'+(prepList.length?'No questions in this lecture yet.':'Prepare questions before the lecture (“Add several…”, or “☆ Save for later” above) and start them with one click. Organise them by lecture within this class.')+'</p>')+'</div>'+
       (hist?'<div>'+hist+'</div><div class="row"><button class="link small" data-act="plcsv">Download all results (CSV)</button></div>':'')+
       '</div></div></div>';
   } else {
-    const rev=P.phase==='r', res=pollResults(it), tot=res.n;
+    const rev=P.phase==='r', res=pollResults(it), tot=res.n, nxt=rev?nextPrep():null;
     let body;
     if(rev) body=pollResBody(it,res,null,P.lang);
     else if(it.type==='choice') body='<div class="opts">'+it.opts.map((o,i)=>'<div class="opt"><span class="k">'+LETTERS[i]+'</span><span class="t">'+(o?esc(o):'')+'</span></div>').join('')+'</div>';
@@ -1453,12 +1461,15 @@ function pollPaint(){
     html='<div class="proj">'+bar('<button class="btn ghost" data-act="plclasses">← Classes</button><span class="lec">'+esc(P.name)+'</span><span class="muted">·</span><span class="pill">'+esc(PTYPES[it.type])+'</span>')+
       '<div class="pm pollm"><div><div class="qtext">'+(it.q?esc(it.q):'<span class="muted">'+(it.type==='choice'?'Vote!':'Answer on your phone')+'</span>')+'</div>'+body+tally+'</div></div>'+
       '<div class="pf"><span class="info">'+T('Join:')+' <b>'+esc(location.host+location.pathname.replace(/index\.html$/,''))+'</b> · code <b>'+P.code+'</b></span>'+
-      (rev?'<button class="btn" data-act="plreopen" title="Let students answer again">↺ Reopen</button><button class="btn primary" data-act="plnew" title="Space / N">New poll ▶</button>':'<button class="btn primary" data-act="plreveal" title="Space / →">Reveal results ▶</button>')+
-      ''+(rev?'':'<button class="btn" data-act="plnewnow" title="N">New poll</button>')+'<button class="btn" data-act="plqr" title="Q">QR code</button><button class="btn" data-act="hfull" title="F">⛶</button><button class="btn ghost" data-act="theme" aria-label="Toggle theme">'+THEME_ICON+'</button></div></div>';
+      (rev?'<button class="btn" data-act="plreopen" title="Let students answer again">↺ Reopen</button>'+(nxt?'<button class="btn primary" data-act="plnextprep" title="Space">Next: '+esc((nxt.q||prepSummary(nxt)).slice(0,28))+(((nxt.q||'').length>28)?'…':'')+' ▶</button><button class="btn" data-act="plnew" title="N">New poll</button>':'<button class="btn primary" data-act="plnew" title="Space / N">New poll ▶</button>'):'<button class="btn primary" data-act="plreveal" title="Space / →">Reveal results ▶</button>')+
+      ''+(rev?'':'<button class="btn" data-act="plnewnow" title="N">New poll</button>')+(prepList.length?'<button class="btn" data-act="plprep" title="P">Prepared</button>':'')+'<button class="btn" data-act="plqr" title="Q">QR code</button><button class="btn" data-act="hfull" title="F">⛶</button><button class="btn ghost" data-act="theme" aria-label="Toggle theme">'+THEME_ICON+'</button></div></div>';
   }
   if(P.ui.overlay==='qr') html+='<div class="overlay" data-act="plclose"><div class="modal" style="text-align:center"><div class="qrbox">'+qrSvg(url)+'</div><div class="code" style="margin-top:14px">'+P.code+'</div><div class="joinurl" style="margin-top:8px">'+esc(url)+'</div></div></div>';
+  if(P.ui.overlay==='prep') html+='<div class="overlay" data-act="plclose"><div class="modal" style="width:min(92vw,720px)"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Prepared questions</h2><button class="btn ghost" data-act="plclose">Close</button></div>'+folderBar(pst,pcur,false)+(shown.length?shown.map(x=>prepRow(x,false)).join(''):'<p class="muted small">No questions in this lecture.</p>')+'<div class="row" style="margin-top:10px"><button class="btn" data-act="plnewnow">Write a new question</button></div></div></div>';
+  if(P.ui.overlay==='bulk') html+='<div class="overlay" data-act="plclose"><div class="modal" style="width:min(92vw,720px)"><h2 style="margin-top:0">Add several questions</h2><p class="muted small">One question per line. Answers after “|” (empty answers = just a letter). <code>#num</code> / <code>#word</code> at the start makes a number or word-cloud question. A line <code>## Lecture 3</code> puts the following questions into that lecture (created if needed).</p><pre class="small" style="background:var(--bg);padding:10px;border-radius:10px;white-space:pre-wrap">Which phase comes first? | Prophase | Metaphase | Anaphase\nDo you agree? | | |\n#num How many hours did you sleep?\n#word One word for “development”\n## Lecture 3\nIs it a gene? | | </pre><textarea id="plbulk" class="pin" rows="8" placeholder="Paste or type your questions…"></textarea><div class="row" style="margin-top:12px"><button class="btn primary" data-act="plbulkadd">Add to prepared questions</button><button class="btn ghost" data-act="plclose">Cancel</button></div></div></div>';
   app.innerHTML=html; pollStatus(); pollCount(); typeset(app);
-  const q=document.getElementById('plq'); if(q&&!P.noFocus){ q.focus(); try{ q.setSelectionRange(q.value.length,q.value.length); }catch(e){} }
+  const bk=document.getElementById('plbulk'); if(bk) bk.focus();
+  const q=document.getElementById('plq'); if(q&&!P.noFocus&&!P.ui.overlay){ q.focus(); try{ q.setSelectionRange(q.value.length,q.value.length); }catch(e){} }
 }
 function pollPickerPaint(){
   const st=pollStore();
@@ -1470,8 +1481,65 @@ function pollPickerPaint(){
     '<div class="card stack" style="margin-top:14px"><h2>New class</h2><div class="row"><input id="plname" class="pin" style="flex:1 1 220px" maxlength="40" placeholder="Name, e.g. Systems Biology Mon 10:15"><select id="pllangsel" aria-label="Language of the student page"><option value="en">Students: English</option><option value="de">Students: Deutsch</option></select><button class="btn primary" data-act="plnewclass">Create</button></div></div></div>';
   const i=document.getElementById('plname'); if(i) i.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.plnewclass(); });
 }
+
+const pid = () => 'q'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+function draftSpec(){
+  const d=P.draft, type=d.type||'choice', n=Math.max(2,Math.min(8,d.n||4)), sp={type, q:(d.q||'').trim()};
+  if(type==='choice') sp.opts=Array.from({length:n},(_,i)=>((d.opts||[])[i]||'').trim());
+  return sp;
+}
+function pollStartItem(sp){
+  const it={ id:'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,4), type:sp.type, q:(sp.q||'').trim(), t:Date.now(), answers:{} };
+  if(sp.type==='choice') it.opts=(sp.opts&&sp.opts.length>=2?sp.opts:['','','','']).map(o=>String(o||'').trim());
+  P.items.push(it); P.cur=it.id; P.phase='q'; P.ui.compose=false; P.ui.overlay=null; P.msg=''; pollSave(); pbroadcast(); pollPaint(); window.scrollTo(0,0);
+}
+/* bulk syntax, one question per line (a line "## Lecture 3" starts/chooses a folder):  "Question | answer A | answer B | …"  (empty answers allowed: "Which? | | | |" = A-D)
+   "Which?" alone = A-D;  "#num How many…?" = number poll;  "#word One word for …" = word cloud */
+function parseBulk(text){
+  const out=[];
+  String(text).split(/\r?\n/).forEach(line=>{
+    line=line.trim(); if(!line) return; let type='choice';
+    const hd=line.match(/^##\s*(.+)$/); if(hd){ out.push({heading:hd[1].trim()}); return; }
+    const m=line.match(/^#(num|number|word|words|choice)\b\s*/i);
+    if(m){ const k=m[1].toLowerCase(); type=k.startsWith('num')?'num':(k.startsWith('word')?'word':'choice'); line=line.slice(m[0].length); }
+    if(type!=='choice'){ out.push({id:pid(),type,q:line.trim()}); return; }
+    const parts=line.split('|').map(s=>s.trim()), q=parts.shift();
+    let opts=parts.length>=2?parts.slice(0,8):['','','',''];
+    out.push({id:pid(),type:'choice',q,opts});
+  });
+  return out;
+}
+function prepSummary(x){ return x.type==='choice' ? 'Choice · '+x.opts.map((o,i)=>o||LETTERS[i]).join(' / ') : PTYPES[x.type]; }
+function prepRow(x, full){
+  return '<div class="prow"><div class="ptxt"><b>'+esc(x.q||'(no question text)')+'</b><div class="muted small">'+esc(prepSummary(x))+'</div></div>'+
+    '<button class="btn primary" data-act="plrun" data-arg="'+x.id+'">Start ▶</button>'+
+    (full?'<button class="btn ghost" data-act="plprepmove" data-arg="'+x.id+':-1" title="Move up">↑</button><button class="btn ghost" data-act="plprepmove" data-arg="'+x.id+':1" title="Move down">↓</button><button class="btn ghost" data-act="plprepedit" data-arg="'+x.id+'">Edit</button><button class="btn ghost" data-act="plprepdel" data-arg="'+x.id+'" title="Delete">✕</button>':'')+'</div>';
+}
+const foldOf = (st,x) => st.folders.some(f=>f.id===x.folder) ? x.folder : '';
+function curFolder(st){
+  const hasUn=st.prepared.some(x=>foldOf(st,x)==='');
+  if(st.pfolder==='' && (hasUn||!st.folders.length)) return '';
+  if(st.pfolder && st.folders.some(f=>f.id===st.pfolder)) return st.pfolder;
+  return st.folders.length ? st.folders[0].id : '';
+}
+const folderItems = (st,fid) => st.prepared.filter(x=>foldOf(st,x)===fid);
+function copyBar(){
+  const others=pollStore().classes.filter(c=>c.id!==P.id && ((LS.get('lq.poll.'+c.id,{})||{}).prep||{}).prepared && LS.get('lq.poll.'+c.id,{}).prep.prepared.length);
+  if(!others.length) return '';
+  return '<div class="row small muted" style="gap:8px">Copy prepared lectures from another class: <select id="plcopysel">'+others.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('')+'</select><button class="btn" data-act="plcopyfrom">Copy</button></div>';
+}
+function nextPrep(){ const st=P.prep, cur=st.prepared.find(x=>x.id===P.lastPrep); if(!cur) return null; const l=folderItems(st,foldOf(st,cur)), i=l.findIndex(x=>x.id===cur.id); return i>=0&&i+1<l.length?l[i+1]:null; }
+function folderBar(st, cur, manage){
+  const un=folderItems(st,'');
+  if(!st.folders.length && !manage) return '';
+  const chip=(id,name,n)=>'<button class="seg'+(cur===id?' on':'')+'" data-act="plfolder" data-arg="'+esc(id)+'">'+esc(name)+' <span class="muted small">'+n+'</span></button>';
+  let h='<div class="segs" style="margin:6px 0">'+st.folders.map(f=>chip(f.id,f.name,folderItems(st,f.id).length)).join('')+((un.length||!st.folders.length)?chip('','Unsorted',un.length):'')+'</div>';
+  if(manage) h+='<div class="row" style="gap:8px;margin:6px 0"><input id="plfname" class="pin" style="flex:1 1 180px;max-width:280px;padding:8px 12px" maxlength="40" placeholder="New lecture, e.g. Lecture 3"><button class="btn" data-act="plfoldernew">+ Lecture</button>'+(cur?'<button class="btn ghost" data-act="plfolderrename">Rename</button><button class="btn ghost" data-act="plfolderdel">Delete lecture</button>':'')+'</div>';
+  return h;
+}
 function pollKey(e){
   if(!P||route.name!=='poll'||e.altKey) return; const k=e.key, tg=(e.target||{}).tagName||'';
+  if((e.target||{}).id==='plbulk'){ if(k==='Escape'){ P.ui.overlay=null; pollPaint(); } return; }
   if(P.ui.overlay && k==='Escape'){ P.ui.overlay=null; pollPaint(); return; }
   if(P.ui.compose||!pollItem()){
     if(k==='Escape'&&pollItem()){ ACTS.plcancel(); return; }
@@ -1483,8 +1551,9 @@ function pollKey(e){
     return;
   }
   if(e.ctrlKey||e.metaKey||/^(INPUT|TEXTAREA|SELECT)$/.test(tg)) return;
-  if(k===' '||k==='ArrowRight'||k==='Enter'||k==='PageDown'){ e.preventDefault(); if(P.phase==='q') ACTS.plreveal(); else ACTS.plnew(); }
+  if(k===' '||k==='ArrowRight'||k==='Enter'||k==='PageDown'){ e.preventDefault(); if(P.phase==='q') ACTS.plreveal(); else if(nextPrep()) ACTS.plnextprep(); else ACTS.plnew(); }
   else if(k==='n'||k==='N'){ ACTS.plnewnow(); }
+  else if(k==='p'||k==='P'){ if(P.prep.prepared.length){ P.ui.overlay='prep'; pollPaint(); } }
   else if(k==='q'||k==='Q'){ P.ui.overlay=P.ui.overlay==='qr'?null:'qr'; pollPaint(); }
   else if(k==='f'||k==='F'){ ACTS.hfull(); }
 }
@@ -1511,14 +1580,48 @@ Object.assign(ACTS,{
   pltype(v){ P.draft.type=v; pollSaveSoon(); P.noFocus=false; pollPaint(); },
   pln(v){ P.draft.n=+v; pollSaveSoon(); pollPaint(); },
   pllang(v){ P.lang=v; const st=pollStore(), c=st.classes.find(x=>x.id===P.id); if(c){ c.lang=v; pollStoreSave(st); } pbroadcast(); pollPaint(); },
-  plstart(){
-    const d=P.draft, type=d.type||'choice', q=(d.q||'').trim(), n=Math.max(2,Math.min(8,d.n||4));
-    const it={ id:'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,4), type, q, t:Date.now(), answers:{} };
-    if(type==='choice') it.opts=Array.from({length:n},(_,i)=>((d.opts||[])[i]||'').trim());
-    P.items.push(it); P.cur=it.id; P.phase='q'; P.ui.compose=false; pollSave(); pbroadcast(); pollPaint(); window.scrollTo(0,0);
+  plstart(){ pollStartItem(draftSpec()); },
+  plrun(id){ const st0=P.prep, x=st0.prepared.find(y=>y.id===id); if(!x) return; st0.pfolder=foldOf(st0,x); prepSave(); P.lastPrep=id; P.ui.overlay=null; pollStartItem(x); },
+  plprep(){ P.ui.overlay='prep'; pollPaint(); },
+  plbulk(){ P.ui.overlay='bulk'; pollPaint(); },
+  plbulkadd(){
+    const el=document.getElementById('plbulk'), st=P.prep; const add=parseBulk(el?el.value:''); let fid=curFolder(st), n=0;
+    add.forEach(x=>{
+      if(x.heading!==undefined){ let f=st.folders.find(y=>y.name.toLowerCase()===x.heading.toLowerCase()); if(!f){ f={id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,4),name:x.heading.slice(0,40)}; st.folders.push(f); } fid=f.id; st.pfolder=f.id; return; }
+      x.folder=fid; st.prepared.push(x); n++; });
+    P.msg = n ? n+' question'+(n>1?'s':'')+' added.' : 'Nothing to add — one question per line.'; if(n) prepSave();
+    P.ui.overlay=null; pollPaint();
   },
+  plsaveprep(){
+    const st=P.prep, sp=draftSpec();
+    if(!sp.q && !(sp.opts||[]).some(Boolean)){ P.msg='Type a question or answers first.'; pollPaint(); return; }
+    const fs=document.getElementById('plfsel'); sp.folder = fs ? fs.value : curFolder(st);
+    if(P.editing){ const x=st.prepared.find(y=>y.id===P.editing); if(x) Object.assign(x,sp); else st.prepared.push(Object.assign({id:pid()},sp)); P.msg='Changes saved.'; P.editing=null; }
+    else { st.prepared.push(Object.assign({id:pid()},sp)); P.msg='Saved to prepared questions.'; }
+    st.pfolder=sp.folder;
+    prepSave(); pollPaint();
+  },
+  plprepedit(id){ const x=P.prep.prepared.find(y=>y.id===id); if(!x) return; P.editing=id; P.draft={type:x.type,q:x.q||'',n:x.type==='choice'?x.opts.length:4,opts:(x.opts||[]).slice()}; P.ui.compose=true; P.ui.overlay=null; pollSaveSoon(); pollPaint(); },
+  plprepcancel(){ P.editing=null; P.msg=''; pollPaint(); },
+  plprepdel(id){ const st=P.prep; if(!confirm('Delete this prepared question?')) return; st.prepared=st.prepared.filter(y=>y.id!==id); prepSave(); pollPaint(); },
+  plprepmove(a){ const [id,d]=a.split(':'), st=P.prep, x=st.prepared.find(y=>y.id===id); if(!x) return; const l=folderItems(st,foldOf(st,x)), li=l.findIndex(y=>y.id===id), nb=l[li+(+d)]; if(!nb) return;
+    const i=st.prepared.indexOf(x), j=st.prepared.indexOf(nb); st.prepared[i]=nb; st.prepared[j]=x; prepSave(); pollPaint(); },
+  plcopyfrom(){
+    const el=document.getElementById('plcopysel'); if(!el) return; const src=(LS.get('lq.poll.'+el.value,{})||{}).prep; if(!src||!src.prepared) return; const st=P.prep, map={};
+    (src.folders||[]).forEach(f=>{ let g=st.folders.find(y=>y.name.toLowerCase()===f.name.toLowerCase()); if(!g){ g={id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,4),name:f.name}; st.folders.push(g); } map[f.id]=g.id; });
+    let n=0; src.prepared.forEach(x=>{ st.prepared.push(Object.assign({},x,{id:pid(),folder:map[x.folder]||''})); n++; });
+    prepSave(); P.msg=n+' question'+(n===1?'':'s')+' copied.'; pollPaint();
+  },
+  plfolder(id){ const st=P.prep; st.pfolder=id; prepSave(); pollPaint(); },
+  plfoldernew(){ const el=document.getElementById('plfname'), name=((el&&el.value)||'').trim().slice(0,40); if(!name) { if(el) el.focus(); return; } const st=P.prep;
+    let f=st.folders.find(y=>y.name.toLowerCase()===name.toLowerCase()); if(!f){ f={id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,4),name}; st.folders.push(f); } st.pfolder=f.id; prepSave(); P.noFocus=true; pollPaint(); },
+  plfolderrename(){ const st=P.prep, f=st.folders.find(y=>y.id===curFolder(st)); if(!f) return; const n=(prompt('Lecture name',f.name)||'').trim().slice(0,40); if(!n) return; f.name=n; prepSave(); pollPaint(); },
+  plfolderdel(){ const st=P.prep, f=st.folders.find(y=>y.id===curFolder(st)); if(!f) return; const n=folderItems(st,f.id).length;
+    if(!confirm('Delete the lecture “'+f.name+'”'+(n?' and its '+n+' prepared question'+(n>1?'s':''):'')+'?')) return;
+    st.prepared=st.prepared.filter(x=>foldOf(st,x)!==f.id); st.folders=st.folders.filter(y=>y.id!==f.id); st.pfolder=null; prepSave(); pollPaint(); },
+  plnextprep(){ const nx=nextPrep(); if(nx) ACTS.plrun(nx.id); },
   plcancel(){ P.ui.compose=false; pollPaint(); },
-  plnewnow(){ P.ui.compose=true; P.noFocus=false; pollPaint(); },
+  plnewnow(){ P.ui.compose=true; P.noFocus=false; P.msg=''; pollPaint(); },
   plnew(){ P.ui.compose=true; P.noFocus=false; pollPaint(); },
   plreveal(){ if(P.phase!=='q') return; P.phase='r'; pollSave(); pbroadcast(); pollPaint(); },
   plreopen(){ if(P.phase!=='r') return; P.phase='q'; pollSave(); pbroadcast(); pollPaint(); },
