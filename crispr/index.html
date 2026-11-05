@@ -1,1 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRISPR design: tag vhp-1 with GFP</title>
+<style>
+:root{
+  --bg:#f5f7f8; --card:#fff; --ink:#18242b; --muted:#5c6b74; --line:#dfe5e9;
+  --accent:#0b6e8f; --accent-ink:#fff; --ok:#1a7f4b; --okbg:#e5f4ec; --bad:#b3261e; --badbg:#fbe9e7; --warn:#8a5a00; --warnbg:#fff3d6;
+  --c-ins:#d93025; --c-pam:#f6c445; --c-guide:#1a73e8; --c-cut:#8e24aa; --c-gfp:#bfe8c9; --c-mut:#ff7043;
+  --c-hr1:#0b9d8a; --c-hr2:#e8710a; --c-p1:#1a73e8; --c-p2:#188038; --c-p3:#c2185b; --seqbg:#fbfcfc; --c-stop:#f4a79f;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme=light]){
+  --bg:#12181c; --card:#1b242a; --ink:#e6edf1; --muted:#9aa9b3; --line:#2b3841; --accent:#4cb7d9; --accent-ink:#06222c;
+  --ok:#6fd39b; --okbg:#143323; --bad:#ff8a80; --badbg:#3a1d1a; --warn:#f2c46d; --warnbg:#3a2d10;
+  --c-pam:#b88a12; --c-gfp:#25523a; --c-guide:#6aa6ff; --c-cut:#d38be6; --c-mut:#ff8a65; --c-hr1:#3fd1bd; --c-hr2:#ffa04d; --c-p1:#6aa6ff; --c-p2:#6fd39b; --c-p3:#f48fb1; --seqbg:#162026; --c-stop:#9c3a32;
+}}
+:root[data-theme=dark]{
+  --bg:#12181c; --card:#1b242a; --ink:#e6edf1; --muted:#9aa9b3; --line:#2b3841; --accent:#4cb7d9; --accent-ink:#06222c;
+  --ok:#6fd39b; --okbg:#143323; --bad:#ff8a80; --badbg:#3a1d1a; --warn:#f2c46d; --warnbg:#3a2d10;
+  --c-pam:#b88a12; --c-gfp:#25523a; --c-guide:#6aa6ff; --c-cut:#d38be6; --c-mut:#ff8a65; --c-hr1:#3fd1bd; --c-hr2:#ffa04d; --c-p1:#6aa6ff; --c-p2:#6fd39b; --c-p3:#f48fb1; --seqbg:#162026; --c-stop:#9c3a32;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+h1{font-size:1.25rem;margin:0}
+h2{font-size:1.15rem;margin:0 0 6px}
+.sub{color:var(--muted);font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pill{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:.8rem;cursor:pointer}
+.pill.cur{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pill.done{color:var(--ok);border-color:var(--ok)}
+.pill[disabled]{opacity:.45;cursor:default}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.msg{border-radius:10px;padding:8px 12px;margin:10px 0;font-size:.95rem}
+.msg.ok{background:var(--okbg);color:var(--ok)} .msg.bad{background:var(--badbg);color:var(--bad)} .msg.warn{background:var(--warnbg);color:var(--warn)} .msg.info{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+input[type=text],input[type=number],textarea{font:15px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--seqbg);color:var(--ink)}
+input[type=number]{width:90px}
+label.f{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 3px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}
+details{margin-top:8px} summary{cursor:pointer;color:var(--accent)}
+/* viewer */
+.viewer{background:var(--seqbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px;overflow:auto;max-height:430px}
+.vrow{display:flex;align-items:flex-start;margin:3px 0 9px}
+.vlab{width:62px;flex:none;color:var(--muted);font:11px ui-monospace,Menlo,Consolas,monospace;padding-top:2px;text-align:right;padding-right:8px}
+.vseq{font:13px/17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap}
+.vseq .l2{color:var(--muted)}
+.vseq .l1 .b{cursor:default}
+.mode-base .l1 .b,.mode-bnd .l1 .b{cursor:pointer}
+.b{display:inline-block;width:9px;text-align:center;position:relative}
+.b.g{margin-right:9px}
+.l1 .b.hov{outline:1px solid var(--accent);background:rgba(11,110,143,.18)}
+.bnd::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;border-left:2px solid var(--bc,var(--c-ins));pointer-events:none}
+.bnd.dash::before{border-left-style:dashed}
+.bnd-hov::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;border-left:2px dotted var(--accent)}
+.gapbar{margin:4px 0 10px 62px;padding:3px 10px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:.8rem;display:inline-block}
+.vseq .l2,.vlab,.gapbar,.lbl{-webkit-user-select:none;user-select:none}
+.vseq .l1{-webkit-user-select:text;user-select:text}
+.vseq .l1 ::selection{background:#ffd54f;color:#000}
+.tok{display:inline-block;padding:0 4px;margin:0 3px;border-radius:4px;background:var(--c-gfp);color:var(--ink);font-weight:700;position:relative}
+.vrow.hasl{padding-top:13px}
+.lbl{position:absolute;top:-13px;left:0;font-size:10px;line-height:11px;font-weight:700;white-space:nowrap}
+.copybar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;padding:8px 10px;border:1px dashed var(--accent);border-radius:10px;background:var(--bg)}
+.copybar .info{font-size:.85rem;color:var(--muted)}
+.copied{font:12px ui-monospace,Menlo,Consolas,monospace;word-break:break-all;color:var(--ok)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+/* sidebar summary */
+.sum{display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:.88rem}
+.sum div:nth-child(odd){color:var(--muted)}
+.seqbox{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;word-break:break-all;background:var(--seqbg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.seqbox .hr1{color:var(--c-hr1);font-weight:600}.seqbox .hr2{color:var(--c-hr2);font-weight:600}.seqbox .gf{color:var(--ok)}.seqbox .mu{background:var(--c-mut);color:#000}
+table.t{border-collapse:collapse;font-size:.9rem;width:100%}
+table.t td,table.t th{border:1px solid var(--line);padding:5px 8px;text-align:left}
+canvas{max-width:100%;border-radius:8px;border:1px solid var(--line);background:#222}
+.nav{display:flex;justify-content:space-between;gap:8px;margin-top:12px}
+.tt{cursor:help;border-bottom:1px dotted var(--muted)}
+@media(max-width:560px){.wrap{padding:10px}.sum{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>Design a CRISPR edit: tag <i>vhp-1</i> with GFP</h1><div class="sub">Step-by-step version of the exercise "Designing a CRISPR". Everything is checked as you go.</div></div>
+    <div class="row"><button class="ghost" id="btnTheme" title="Light / dark">Light/Dark</button><button class="ghost" id="btnRestart">Restart</button></div>
+  </header>
+  <div class="steps" id="stepper"></div>
+  <div class="card" id="stepcard"></div>
+  <div class="card" id="viewcard">
+    <div class="row" style="justify-content:space-between"><b id="viewtitle">Sequence</b><span class="sub" id="viewhelp"></span></div>
+    <div id="copybar" class="copybar" style="display:none">
+      <span class="info">Drag over the <b>upper</b> sequence to select a range (it may span several lines; line numbers are not copied), then:</span>
+      <button class="primary" id="bCopyF">Copy forward</button><button class="primary" id="bCopyR">Copy reverse complement</button>
+      <span class="info" id="selinfo">nothing selected</span><div class="copied" id="copymsg" style="flex-basis:100%"></div>
+    </div>
+    <div id="viewer" class="viewer" style="margin-top:8px"></div>
+    <div id="view2wrap" style="display:none"><div style="margin:12px 0 4px"><b id="viewtitle2"></b></div><div id="viewer2" class="viewer"></div></div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="card" id="sumcard"><b>Your design so far</b><div class="sum" id="summary" style="margin-top:8px"></div></div>
+</div>
 
+<script>
+/* =====================================================================
+   DATA  (from the exercise files vhp-1.ape and EGFP.ape)
+   ===================================================================== */
+const WT = "AATATGACAGTACTTGACACAGTCACAATCTCTACATGCGGGTTGGCTGCACTTATTCGCGAGGCTCCAGACACAACGCTTGTTGTCGATTGTCGTGGATTTACAGAATACAATGAATCTCATGTTCGACACTCTATGAATGCATTTTTCTCGAAACTCATCAGAAGACGTCTTTTTGAAAATAAGGTAAGTCGTTTTTTTTTTGGAAAAATATTTGTTTTTCATTATTTGCTCGTTACTTGCTTTTTTCTTCTATTTTCCTTGAACAATCATATATCAATAGAGTAAAAAACTCTGTCTGATTTCTCCAAATTTCTTTCAATCTTCCCAATAATATTGATTAGTTTTTTGTGTTTGTGAATGCTAGTGAGTGGCGCAGCGGGCCGCGAATTGACGTCATAAGAAGGGGACGGTATTGGATCGAAACACACAAAAAAGAGTGGAATGAATGGACTAGAACGTTAAGAGACCAACGGTCTAAAAGTCAAAGCCTTATTTTTAGTGCAATGGAACCAACATTAGTCAAACAGGTGGGGGACTCGCATTCGGTGAATTTCTGAAACTGATGATTAAATTATTGGTATACACAAGTCAGGTTTAGTCACTTTAATTGTAGACTAGACTTACAATTAGCTAGACTTGTAATTTTTGAGCTGCAAAATTGGAGAAACAAAAGTGAGTCAGCTATAGCCTAGGCATAGATTAATTGTGTTGAATTATTTATGTGTATGTTGATCAAATTTCACGTCAGGCATGAATATTGAAAAAGTTATTAATTCTAAACATTTGACAACGTACCTTTTAGCCTGATTAAATACGATATTCTTTTAAAAAAAAGTATTCTAGCAATTCTCATATGTACAACATAAGAACTATAAGATTTTTATAAATGCGCCAAAATGTTTTTTTTCTGAAAATTCTATAGATTTTTATATAAGTTCCCTTTCTAGATTTGCTATTTTTTGATCTCATTGAAACTTCCAAACATTTTCCTCGCTTTGCACCCCGTTATCAGCCATGATTTGTGTCTCTTATCCAAACATTGGCTCTTTTTTGTGTGATTTTTGTGTGACCACCCGAAATAATTATAGGATTTTTTACGAAATTCGTCTGACTTCTACCGCTGCAAATCACACTTTTTTTCAAAAAATGACATCAATATGCAAACATGTATCTACCGTAACATAACGCAATTATACGTTGCAAATGAGTCATTTAAAGGTGCATGATGAAATTAAATAGACTACAGTAGATTTCATCATTTCAAGGATCCAAATGGCCCATTGACTCATTGAATTTCAAAAAAGCAGTCCTTTATGACTTCCTACTCACTGATTCGGATCTATGCATCATACAGAACAGCCTCATTTTACGGCCTCCTGGTAATTCAAAACATTTTTTGTCTCTCGGCAATGAATCACAAGCTATTACTAGCTATGATTCATGTCTTTTCTTAGCCGCGTGCAAAACCAATGGTGACTAATTCTTTGTCTCCGTGAATCATTCCGCGTCGGGTGCCGCCACCGCATGACTCAAATAGTGTATACCATCATACAAATGGGCGGTGTTATGGGTGAACACTTTCCTGATGTTGGTCAGTCGTAGAAATTGAGAGCAACCATTTACAACTTTGGTCAGTTTCGTGTACATACCGTATTTCCTATGTTGTAATATTGCTGTGGCCTGCCTTACTTTGGGAGCCTATATCTCGGCTGTTTTTGGAATTATTAAAAAGTTGTCTATTGTCAAAGTGTTTCTTATTCCTTTTTCTATAGTTTTGTAATTGAAAATTCATTGATATAATTAAAATTAACTGAAATATATGCAGTCAAAGTATAGCTTTGAAGAAAATAGCTTTGGAAATTTTTGATTTTTGATTTTTAAATTTGATCTCAAGTCCCTTTATTCATCATTATCAGTTGTTTCATTAAAAAAATTTATAGAAGAAGTCACATTCGGCAAATAGACATATGACATGAATATTGATAAAAGATGCACAATATCAATTAGGGGGAGAATTCTAAACATTCTAGTTCTGAAAATATAACATATGTACATTTCTCGATACGCTTTGTTCGCTGAAAATTCTTAGAAAATAATATTTTTGCATATCCGAGGTGCTAAATAATTTCGAATTTTACCTATTAGGGGGCGTTTTCCGGGCAAGACACGGGAATCCCATCGAATACCTATTTCGAACTTACTTTAGGCAGCTCAAATATTTTTGTCTGCAAAACAATTAACTTCCGGCTTCTTTTTTTGAATATTTTTTGCAATAGATCTATTTTGTCTGTGTTTTTTTCTTCCAACCACACCCAATCCCTTTCTCATACAAACACATGTTCATTCCGTTTCTAGGTATACACTCTCTGTCCCCCCATCCATCTAACCCATTTGTGTCTTCGCCTGACGTAACAAATAAAAACGACCGAATATGTAATGTACATGGGCATACAAATACAATTTTCTGATCATTAGTGACATAGTGATAAGAATGGAATAAAGAAAAAACAGAAGAAGAAGAAGGTGTATGCCTTTCAATGTTTTCTATAGAAGTTAGGCTGAGTCATGAGCAGGGAAAAACAAATGTGTACGGAGACACACGTATTTATTATCGGCCCTTGCCATGCCATAAATGCGACGAAGGAAAAGCCATAACAATCAACAAGTCTGAAAATTTTAATTTCACTTTTCCCTTATCTAGAACATTTTTAACATGAATTTTCACTTTGGCTCAATGCAAACATTTTATCCCACTGGCTCACATTTAAGACTTTTGCATCATTTTTGTGCTTAGTAATTCTTGCAAAGTCAATTGCTCCCTGTCTGATCTTCCAACTTTTTCATCCATTGACTCATTTCTCCTGTCCAGAATCAAATCAAAGATATGATTCACAACTGGTCAGCAGGGTGGCTCGTTGAGCCACAAACAAACATAAAGCCTCTCTTTTTCATGGTCAAAGACCAACACTCTCAAATTTTGATATCTATTTTTGAATTGTTTAGTAAACAACGTGAAATTCATATTGCTCTGTATTTCAGCTCGACGATAACTGCTTAATTCATCAATTGATGAGCTGCTCGTCAGGTTGCACAAAAATGGATGAGAAGCTTGATTTAGTTTTATACGCAGAAGAAGATAAGCCACGTGGAAACAAGAGACGGTAATACTTTTTTTCAAGTGATTTCATAGTTAACCTCTATACTTTCAGAATCGCGTCGTGTAATGCTCCAGAATCCACTGCAAAAATCATGCGAGTTCTGAGAGAACGACTCGAGGACACTGACAAATTTCGAAGCGTCATGGTTCTTGAAGGTAAGCTTTCTTAGAATTTCTGATAGTATTCTCTGACATGTCACGTCTAGTTTACAAGTTTACAAGCGAGAAACATGTCATGCGGATTTGATTCTGACACATCATGTCAAAAACTGAGAGTCCCAGTGTGTGTGGCTTAGAGCTCTTCACATGGTGGCCTTCTTTCAAATGTTTAGTCAAATTGAGTTGACTTGTATTGTGATTAAAAGTGTGTGTGTAATGTTTGAACTCTTTTGTGTGACTTGCCAGTGACTAATGATAGATTAGAGTGAGATTTTTGATTCTAGATTTGGGATTTTAGATTTTTTGCTCAAAAACCAAAAATTGTAGTGCCAAGTATTCAGATCTAAGAACTCACGTATTCGCTTCCTGGTTTAATTTTTAATTTTTAATACTTGTTGATCGGATATCTAGGTACATAATGTTCAGCTCTGAAATTAAATCAAAGCCCCTTATTCTCTCCCTTTTCTTTTTTTTTTTCTTGCTAATGACATTAGGGCAAAAAAAGGCAATCCTTCTCCTGCTTCTCAACGAGAAGGATGCTGTTTCTTTTCCACTTCCAATTCTTTGCTTTATTCTCCATTTTCTCCCCCCATTCGTTTTCAGCATTCAATTTTTGCTACTCTTCTCTGATTTGCACTCTTCCTCCTCCTCCTCTTCTAGTTTCAGATAATCCCTTCTAGATTTATCATCTTTTTTTCTTTTTTTCATAAGCTTCTCATGATATGAGCAACACGTTTCGCGCGGTGCCAAGCACCATAATTAGAGTGTCGTGTGTGTGTGTATGTGAGTGAATGAGTAAGTGAGAGAGTGTGCTGTGATTTAAGCACATTGATCATACTCCAACGGCCTTTTCAATTCTAAAACAGTATGACTCATAATCCGAGAGCTCAAAGAGCATGAATACGTGATTAGACTAATCAAATGTGTGAATACTGAGAAACATTGCAAGTTTTGCAATACCAATTCTAATCTTTTTTTTTCAAATTTTGAGTCACTTTTCTCTGGAAAAATGATTGCAAACCGGTATTTCACACGTCTGCAAAAATTTCAACATTTTTCTGATTGGTAATAATAGTTTGTAGATAGATAGGTTAATGATATTTTTCAATGAAACAAGTAGTTTTCAAGTCAGGGTATTTGAGTCAGAGAGATGATCACACACTTTTCAATGCAAAATGCTCTTTTTCTTGCCATCTTGCACATACACACAAAGCTCTTCTGACTCATACTCTCTCTTTTTTCCCTTTCCTTTTTCTCCCACCGCTCTATCCTATTGATCATAAAAGGCCGAAATGACGACGGCAGGGTGGACGTCTTCTATGTTCTTTCCCTCATCCACACATACTATTTCGAGAAGTCCTCTAACAATCTGCGGTACCTTCTAGGCTTATGTCCTCCCCCGTCCAACTCCTCCCACTTCTTCCACTCCTTCTGAATACTTCCAAACGAGCCCCGCTATAGTGCTGTGCTCAGTGGACCCTCCAAGTTGCCAAATTTTTCAAATGGGTGGTCAACCGTTTGAGGCGTTCCGTAAGAATCGCAAACGAAAGAAGACGAAAAATAAGAAGAAACGAAGAAATAACAATAATTCAAAGAACAAAACTCCCAACACTTTTCCTAATGAAATTGAAGAGCAAGACCCCGTATCATCACTTCCGACATTCCCAGCTAAAAAATTTGGACTAAAACTTCAACTTACTCTCACTTCTTCTCCTACTAACTCATCTAGTCCTATTTCGAGTTCTTCACCAACCAATGGTACGTTTTAAATTCTTCGTATTAAAAATCAAATCAATATAAAATTAAATGTGTGATAAGAAGAGGAAAGAGTCGCTTTCAATACAATCTTTGTCGTCGACATACTAATTTTCATATTCTATTGTGACTCATTTTTGTTTTCAATATTTGTCCCTCCTATCGCCTACTTTGTTTTCAGTTTTCAGCCTTCATTTCACCCCCACTATTTTCAGAATTCCATGATCTCATACTGCGCACTTTCATAGATTCTTAGAATCATATTTCTTGATAACAACAAAAAGTTCATTCATCATGCTTTTTAGTGTTTACAATAACTTATGATTAAGTGATAGAACAACTAGATATATACCTAACATACCTGAACAAGTTTGAGAGAAGGGGTGAAAGAGGCAAAAAAATTGGAATGCGACATTGTCATCGATGAGTCACTTCGTCAATAGCGGCGCCCGATGGTGGGGGAGAGAGATCGAGAGATGGTGAGACGGATGACGCACAGTGAGATAGAATATGAAACCATGAGAGCATATAGAGAAATAAGAGAGCAGAAAAACACAATAAGTGTGTGTGAGTGTGTCATCGAGAGAGAGGCGGGAAAACGAAAAACCACCTGTGGGATAGAGGTGAAAAAAGAGAAAAAAAAGTGAAGAAGAAAATAGTTTCTATCTCCTCCTACTTTTCTGTTCACATCGATACTGAAACCTATTCCTCATTTATTCTTAATTGAATTAGAAGAATGAAAACAATGAAGTCAATATCTAATACTTTTTTCTGTTTCTCGATTTTCCTGATAAAGCTTCTAACTGATAAGAAACCAACGTCGGGGCAGCTTTTCCTCAATAAAATTTCCACTTTCCTGATACTTTGGTCTACTTTCCTTGTTTCAATTGAAACTCTACTTTTCTTTTGCAAATGACTTTCTTGCTAATCTTTTGAATTTTTGAATTGAAATTTTTTGAGACGATACATTTATTAAATATGCAAAAAAACGTTTCAAAATTTTTTAACATCTTTTTGGCTGAAAAAAAGATATGAGTCAGTAGTGTCATTCCCCCTCCCCTTCCAACAAATTAACGATCATACACACCACCACATCAGTCAGTCACTCCTTTCTCTCTCGTTCCCCTCCTCTCATTTAATATGATGATGATTCATTTTTGTTCTTTGCAACCCGATACCATCATACATTCTATGATTAGTAAGTGAACAATATATATGTATATATATATATACATAATTTCTAATCATAACGAAATCAAATTCACGCCGCCTTGTTCCTCGTCGTCTGGAGCAAAGGAAGGCGAGGCGGTACACACTTCCGCTATTATCTTATCATTTCTTCCTCTTCCTATTCTTGCTCCTTTTTCATTTGAATATATAAAGTGTCTGTTGTTATTATCACGGTCTAGTCTGCCATCGTTCTCTGAAAACATTATTCTCTCCGCCTAACTATCTTTATCTTCTATCAGAATTCCAAATCCAAATCAAAAACCCAAGCGCAAAATGAGCCCATGCGTAGTGTCCCGGATAAGACCCACACTTTCGTTCATGCAAGATACTGGTCCGTCAGAATTTTGAATAATCTACATAATTTTACTTTTGAATTTTTCAGGTGGCTTCAAACAATTCGCACAACAATATCCTCAATTGTGCGAGAGTTCAGAAGGAATGACTCGTTTGCCACAAAGCCTCTCACAACCATGTCTATCCCAACCAACTGGAGATGGAATCACATTGATCACTCCAAATATTTATCTCGGAAGTCAAATTGATAGCTTGGATGAGACCATGTTAGATGTAAGTTTGTTGACTCTTGAATATTTCATAATTCCTTTCCCAAAAAGTGATGGTGATGATAAGTCTGAAATCATCAACAAGTGCACACGTCACCATAGTTTCATTCCAGAAAAATCTCTCCACATTTAGTTTTATATAGCGGAGACAAGACACCCACTTTTTCATTTATTTACATACCTCCCGGGGTCAACTGACTGCCAGAGGCGACATGTGCCTCTCTTGTGTAATCGGAAGGGGGGCGACGACTAAAAAATGATTCATCTCAAAGTGCGGTAAAATTTAATGAAAACTAGAAAAATAGAAGAATACAGAGATTTTATTTTGAAACCCAATTTCAATACATTTTTTTGGGGACGATGACTAATTTTCAATGTTTTTTCCAGGCTCTTGATATCAGTGTTGTCATCAACCTTTCTATGACTTGCCCCAAATCCGTATGCATCAAAGAAGATAAGAATTTTATGAGAATCCCAGTAAATGACTCCTATCAAGAAAAACTTTCTCCATATTTTCCAATGGCTTATGAATTTCTTGAAAAATGCAGAAGAGCCGGAAAGAAGTGCCTGATTCATTGTTTGGCTGGCATTTCTAGAAGCCCCACACTGGCTATTTCGTATATTATGCGCTACATGAAAATGGGAAGCGATGATGCATACAGGTATAGGAATTGCAAAATTTGACTTGTTTAATCTTAATCCTAATCTTCCTTCTATTTCAGATATGTGAAAGAGCGTCGCCCTTCGATCTCGCCAAACTTCAATTTTATGGGACAATTGCTTGAATACGAGAATGTTTTAATCAAAGATCATGTGCTTGACTACAATCAAGCTTCAAGACCACACCGACATATGGACTACTATGGGCCATCTGATCTGTGTCCACCAAAGGTTCCAAAAAGTGCATCATCCAACTGTGTATTCCCTGGAAGTACTCATGATGAATCATCACCATCTTCTCCTTCTGTATCAGAAGGATCAGCTGCAAGTGAGCCTGAGACATCATCATCAGCTGCTTCATCTTCATCAACTGCATCTGCACCTCCATCGATGCCTTCTACAAGTGAACAAGGAACATCGTCAGGAACAGTTAATGTCAATGGAAAGAGAAATATGACCATGGATTTGGGACTTCCCCATCGCCCAAAAGCTCTTGGACTTCCATCAAGAATCGGTACTTCTGTTGCGGAGCTGCCGTCTCCATCAACTGAACTTTCGAGATTAAGCTTTAATGGTCCAGAAGCAATTGCTCCATCTACTCCAATTCTTAACTTTACCAACCCATGTTTCAATTCTCCAATCATCCCAGTTGCATCTAGCTCGCGAGAAGTTATTCTGACCCTTCCAACTCCAGCTGCTTCATCTTCTTCTTCAACATCATCTGAACCATCTTTTGATTTCTCATCATTTGAATCTTCATCATCGTCTTCAATTGTTGTCGAGAACCCATTTTTCGCCAGCACAGAAGTGCCTGCTGGATCATCATCGATATCCACACCATCTGGATCACAATCAACTCCAGCATCTGCTTCTTCATCAGCTGCTTCTAGATGCAGAATGAAGGGATTCTTTAAAGTATTCAGCAAGAAGGCTCCAGCTTCAACTTCCACCCCGGTTAGTATAATGAAATTACATTAAACTCCCCCACAAGCCGAATCAATTTTTATTTTTCACATTTTCAGGCTTCCTCAACCCCTGGAACTTCCCGAGCAGCTCGTCCAGAATGTCTCCGATCATCCGGCATCATTATCTCAGCACCAGTTCTTGCAATTACAGAAGAAGAAGATGCCGAGTCTCCAGAATCGGGGTTTAACGAACCCGAAGTCGGAGAAGAAGACGATGATTCGGTGTCAATTTGCTCGACGAGCTCTTTGGAAATTCCGTGTCACCAGTAATTTTGTGAACATCATTCTCTAGTCCACACATAAGTTTCTTCAAATTGAAGAAGAACTATGAAAAATGATTGAAAATTCTTTATTTCAATCAGAACCATTTTTCATCCATCTCTCCCAACATCATTACTCTCATTACAATATGTGATAATTGTATCCCCTTCATCAATCCATCCCACTTCACCCCCTCTCCACATTTTTAAAGTGTCGACGGGTACTGTGTGCTCTTGATTTTGAGCCCTGACCCCCTTCCCCAAGTTCTTCTTCATGAAAAGCAATATTTGAACTCGTGATGTTCGATTCTTTCCGTTTCTTTTTTATTTTTTTTTATTTTTTATATCTTGAATCCATTAGAGTATCCCAATTTTATCAACCATGTTACTTTATTTGACATTACATTTTTTGTATATAACCCGGCAAATTTCATTTATTTATACCATTCAACCCCACCAACCAAAACATCACCCCCAATTTTTCATTTTTAAACCTCTACTGATTCTGGTCTAGCCTGACGTACCACACATTTAATTATGTGGAATTGAAAGAATAATTCAATTAATAATAATGAAAAAAGTTTTTTTTTGA";            // vhp-1 genomic region incl. UTRs (9344 bp)
+const EGFP_FULL = "ATGGTGAGCAAGGGCGAGGAGCTGTTCACCGGGGTGGTGCCCATCCTGGTCGAGCTGGACGGCGACGTAAACGGCCACAAGTTCAGCGTGTCCGGCGAGGGCGAGGGCGATGCCACCTACGGCAAGCTGACCCTGAAGTTCATCTGCACCACCGGCAAGCTGCCCGTGCCCTGGCCCACCCTCGTGACCACCCTGACCTACGGCGTGCAGTGCTTCAGCCGCTACCCCGACCACATGAAGCAGCACGACTTCTTCAAGTCCGCCATGCCCGAAGGCTACGTCCAGGAGCGCACCATCTTCTTCAAGGACGACGGCAACTACAAGACCCGCGCCGAGGTGAAGTTCGAGGGCGACACCCTGGTGAACCGCATCGAGCTGAAGGGCATCGACTTCAAGGAGGACGGCAACATCCTGGGGCACAAGCTGGAGTACAACTACAACAGCCACAACGTCTATATCATGGCCGACAAGCAGAAGAACGGCATCAAGGTGAACTTCAAGATCCGCCACAACATCGAGGACGGCAGCGTGCAGCTCGCCGACCACTACCAGCAGAACACCCCCATCGGCGACGGCCCCGTGCTGCTGCCCGACAACCACTACCTGAGCACCCAGTCCGCCCTGAGCAAAGACCCCAACGAGAAGCGCGATCACATGGTCCTGCTGGAGTTCGTGACCGCCGCCGGGATCACTCTCGGCATGGACGAGCTGTACAAGTAA";     // EGFP incl. stop codon (720 bp)
+const GFP = EGFP_FULL.slice(0, -3);   // 717 bp without stop codon
+const STOP_START = 8759;               // 0-based index of the first base of the TAA stop codon (feature "STOP codon" 8760..8762)
+const EXONS = [[3,186,'exon 1'],[3042,3316,'exon 2'],[6686,6871,'exon 3'],[7254,8762,'exon 4']];  // 0-based [start,end) from vhp-1.ape
+const AMP_MAX = 3000;     // longest PCR product assumed to amplify (short extension time)
+
+/* =====================================================================
+   SEQUENCE HELPERS
+   ===================================================================== */
+const COMP = {A:'T',C:'G',G:'C',T:'A',N:'N'};
+const rc = s => s.toUpperCase().split('').reverse().map(c => COMP[c] || 'N').join('');
+const CODON = {};(function(){const b='TCAG',aa='FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';let k=0;for(const x of b)for(const y of b)for(const z of b)CODON[x+y+z]=aa[k++];})();
+const tr = s => { let o=''; for(let i=0;i+2<s.length;i+=3) o += CODON[s.slice(i,i+3)] || 'X'; return o; };
+const clean = s => (s || '').toUpperCase().replace(/U/g,'T').replace(/[^ACGT]/g,'');
+const gcPct = s => Math.round(100 * (s.split('').filter(c => c==='G'||c==='C').length) / s.length);
+const tmOf = s => s.length < 14 ? 2*(s.split('').filter(c=>c==='A'||c==='T').length)+4*(s.split('').filter(c=>c==='G'||c==='C').length)
+                              : Math.round((64.9 + 41*(s.split('').filter(c=>c==='G'||c==='C').length - 16.4)/s.length)*10)/10;
+function findAll(hay, needle){ const o=[]; let i=hay.indexOf(needle); while(i>=0){o.push(i); i=hay.indexOf(needle,i+1);} return o; }
+
+/* =====================================================================
+   CRISPR LOGIC  (all coordinates 0-based; "boundary b" = between base b-1 and base b)
+   ===================================================================== */
+const INS = STOP_START;                         // insertion boundary: right in front of the stop codon
+function pamAt(s){                               // classify the 3-mer WT[s..s+3) as PAM on + strand (NGG) or - strand (CCN)
+  const w = WT.slice(s, s+3);
+  if (w.length === 3 && w[1]==='G' && w[2]==='G') return '+';
+  if (w.length === 3 && w[0]==='C' && w[1]==='C') return '-';
+  return null;
+}
+function pamInfo(s, strand){
+  if (strand === '+'){ const p0 = s-20; return {s, strand, pam:WT.slice(s,s+3), proto:[p0,s], guide:WT.slice(p0,s), cut:s-3}; }
+  const p0 = s+3;     return {s, strand, pam:rc(WT.slice(s,s+3)), proto:[p0,p0+20], guide:rc(WT.slice(p0,p0+20)), cut:s+6};
+}
+function candidatePams(maxDist){
+  const out=[];
+  for (let s=INS-80; s<INS+80; s++){ const st=pamAt(s); if(!st) continue; const pi=pamInfo(s,st); const d=Math.abs(pi.cut-INS); if(d<=maxDist) out.push(Object.assign(pi,{dist:d})); }
+  return out.sort((a,b)=>a.dist-b.dist);
+}
+const BEST = candidatePams(1000)[0];
+function pamSpansInsertion(pi){ return pi.s < INS && pi.s+3 > INS; }
+function applyMut(seq, mut){ return mut ? seq.slice(0,mut.pos)+mut.base+seq.slice(mut.pos+1) : seq; }
+function pamBroken(pi, mut){                     // is the PAM destroyed in the edited genome?
+  if (pamSpansInsertion(pi)) return true;
+  const w = applyMut(WT, mut).slice(pi.s, pi.s+3);
+  return pi.strand==='+' ? !(w[1]==='G'&&w[2]==='G') : !(w[0]==='C'&&w[1]==='C');
+}
+function aaEffect(pos, base){                    // effect of changing WT base 'pos' on the C-terminal protein
+  if (pos < INS){
+    const cs = INS - 3*Math.ceil((INS-pos)/3);
+    const wtc = WT.slice(cs,cs+3), nc = wtc.slice(0,pos-cs)+base+wtc.slice(pos-cs+1);
+    return {where:'coding', wtc, nc, wtaa:CODON[wtc], naa:CODON[nc], same: CODON[wtc]===CODON[nc]};
+  }
+  if (pos < INS+3){
+    const wtc = WT.slice(INS,INS+3), nc = wtc.slice(0,pos-INS)+base+wtc.slice(pos-INS+1);
+    return {where:'stop', wtc, nc, wtaa:'*', naa:CODON[nc], same: CODON[nc]==='*'};
+  }
+  return {where:'utr', same:true};
+}
+function buildTemplate(L1, L2, mut){
+  const wm = applyMut(WT, mut);
+  return {hr1: wm.slice(INS-L1, INS), gfp: GFP, hr2: wm.slice(INS, INS+L2)};
+}
+function editedGenome(mut){ const wm = applyMut(WT, mut); return wm.slice(0,INS) + GFP + wm.slice(INS); }
+function pcr(templates, f, r, maxLen){            // in-silico PCR: returns list of product sizes for primer f (fwd) and r (rev)
+  const out=[]; const rr = rc(r);
+  for (const t of templates){
+    const fs = findAll(t, f), rs = findAll(t, rr);
+    for (const a of fs) for (const b of rs){ const len = b + r.length - a; if (b >= a && len <= maxLen) out.push(len); }
+  }
+  return out;
+}
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const STEPS = ['Goal','Insertion site','PAM','Guide RNA','Cut site','Mutate PAM','Repair template','Template primers','Genotyping','Result'];
+const fresh = () => ({step:0, done:{}, ins:null, gfpStop:null, pamSel:null, pam:null, guide:null, cut:null, mut:null, mutDraft:null, L1:50, L2:50, ampF:'', ampR:'', g1:'', g2:'', g3:'', tmpl:false, solShown:{}});
+let S = fresh();
+try { const j = JSON.parse(localStorage.getItem('vhp1-crispr-app')||'null'); if (j && j.step!=null) S = Object.assign(fresh(), j); } catch(e){}
+const save = () => { try { localStorage.setItem('vhp1-crispr-app', JSON.stringify(S)); } catch(e){} };
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let FB = {};   // feedback messages per step (not saved)
+
+/* =====================================================================
+   SEQUENCE VIEWER
+   ===================================================================== */
+function colorOf(cls){ return getComputedStyle(document.documentElement).getPropertyValue(cls).trim(); }
+/* opts: seq, segs:[[from,to],...], marks:[{from,to,track:'fill'|'u1'|'u2'|'u3',color:'--c-x'}], bnds:[{at,color,dash}], mode:'base'|'bnd'|null, onPick(i) */
+function renderViewer(el, o){
+  el.onmousemove = el.onmouseleave = el.onclick = null;
+  const wAvail = Math.max(300, el.clientWidth - 90);
+  const perRow = Math.max(30, Math.min(60, Math.floor(wAvail / 9 / 10 / 1.1) * 10));
+  const n = o.seq.length, fill = new Array(n), ul = {u1:new Array(n), u2:new Array(n), u3:new Array(n)}, bd = {}, lb = {};
+  for (const m of (o.marks||[])) for (let i=Math.max(0,m.from); i<Math.min(n,m.to); i++){ if (m.track==='fill') fill[i]=m.color; else ul[m.track][i]=m.color; }
+  for (const b of (o.bnds||[])) bd[b.at] = b;
+  for (const l of (o.labels||[])) lb[l.at] = l;
+  const tok = o.tok || null;
+  let html = '';
+  (o.segs||[[0,n]]).forEach((seg, si) => {
+    if (si>0){ const prev = o.segs[si-1][1], gap = seg[0]-prev; html += `<div class="gapbar">⋯ ${gap} bp not shown (${o.gapLabel||'insert'}) ⋯</div>`; }
+    for (let a=seg[0]; a<seg[1]; a+=perRow){
+      const e = Math.min(seg[1], a+perRow); let l1='', l2='', hasl=false;
+      for (let i=a;i<e;i++){
+        if (tok && tok.pos===i){ l1 += `<span class="tok" data-i="${i-0.5}" data-tok="${esc(tok.text)}">${esc(tok.text)}</span>`; l2 += `<span class="tok" style="visibility:hidden">${esc(tok.text)}</span>`; }
+        const ch = o.seq[i], c2 = COMP[ch]||'N';
+        const sh = []; if (ul.u1[i]) sh.push(`inset 0 -2px 0 ${colorOf(ul.u1[i])}`); if (ul.u2[i]) sh.push(`inset 0 -5px 0 ${colorOf(ul.u2[i])}`); if (ul.u3[i]) sh.push(`inset 0 -8px 0 ${colorOf(ul.u3[i])}`);
+        const st = (fill[i]?`background:${colorOf(fill[i])};`:'') + (sh.length?`box-shadow:${sh.join(',')};`:'') + (bd[i]?`--bc:${colorOf(bd[i].color)};`:'');
+        const cls = 'b' + (((i-a)%10===9 && i<e-1)?' g':'') + (bd[i]?' bnd'+(bd[i].dash?' dash':''):'');
+        const lab = lb[i] ? `<span class="lbl" style="color:${colorOf(lb[i].color||'--c-ins')}">${esc(lb[i].text)}</span>` : ''; if (lab) hasl = true;
+        l1 += `<span class="${cls}" data-i="${i}" style="${st}">${lab}${ch}</span>`;
+        l2 += `<span class="${cls.replace(' bnd','').replace(' dash','')}" style="${fill[i]?`background:${colorOf(fill[i])};`:''}">${c2}</span>`;
+      }
+      html += `<div class="vrow${hasl?' hasl':''}"><div class="vlab">${a+1}</div><div class="vseq mode-${o.mode||'none'}"><div class="l1">${l1}</div><div class="l2">${l2}</div></div></div>`;
+    }
+  });
+  el.innerHTML = html;
+  if (!o.mode) return;
+  let last = null;
+  const clear = () => { el.querySelectorAll('.hov').forEach(x=>x.classList.remove('hov')); el.querySelectorAll('.bnd-hov').forEach(x=>x.classList.remove('bnd-hov')); };
+  const pick = ev => { const t = ev.target.closest('.l1 .b'); if (!t) return null; const i = +t.dataset.i; if (o.mode==='bnd'){ const r=t.getBoundingClientRect(); return (ev.clientX < r.left + r.width/2) ? i : i+1; } return i; };
+  el.onmousemove = ev => { const p = pick(ev); if (p===last) return; last=p; clear(); if (p==null) return;
+    if (o.mode==='base'){ for (let k=0;k<3;k++){ const x = el.querySelector(`.l1 .b[data-i="${p+k}"]`); if (x) x.classList.add('hov'); } }
+    else { const x = el.querySelector(`.l1 .b[data-i="${p}"]`); if (x) x.classList.add('bnd-hov'); } };
+  el.onmouseleave = () => { clear(); last=null; };
+  el.onclick = ev => { const p = pick(ev); if (p!=null && o.onPick) o.onPick(p); };
+}
+/* ---- selection and copy tools (forward / reverse complement) ---- */
+let COPYMODE = false;
+function selInfo(){
+  const sel = window.getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+  const r = sel.getRangeAt(0), found = [];
+  for (const id of ['viewer','viewer2']){
+    const root = $(id); if (!root.offsetParent) continue;
+    const items = [...root.querySelectorAll('.l1 .b, .l1 .tok')].filter(el => r.intersectsNode(el));
+    if (items.length) found.push([id, items]);
+  }
+  if (!found.length) return null;
+  if (found.length > 1) return {seq:'', ok:false, n:0, root:'both'};
+  const [id, items] = found[0]; let seq = '', ok = true, prev = null, n = 0;
+  for (const el of items){ const i = +el.dataset.i; if (prev!=null && i-prev>1) ok = false; prev = i;
+    if (el.classList.contains('tok')) seq += el.dataset.tok; else { const l = el.querySelector('.lbl'); seq += l ? el.textContent.replace(l.textContent,'') : el.textContent; n++; } }
+  return {seq, ok, n, root:id};
+}
+function updateSel(){
+  if (!COPYMODE) return; const s = selInfo();
+  $('selinfo').textContent = !s ? 'nothing selected' : (s.ok ? `${s.n} nt selected` : 'selection includes a hidden part: select inside one visible block');
+}
+function writeClip(t){
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove(); };
+  try { navigator.clipboard.writeText(t).catch(fallback); } catch(e){ fallback(); }
+}
+function doCopy(kind){
+  const s = selInfo(), box = $('copymsg');
+  if (!s){ box.style.color='var(--bad)'; box.textContent = 'Select a range in the upper sequence first (drag with the mouse).'; return; }
+  if (!s.ok){ box.style.color='var(--bad)'; box.textContent = 'Your selection includes a hidden part of the sequence. Select only inside one visible block.'; return; }
+  let t = s.seq; if (kind==='r'){ if (/[^ACGT]/.test(t)){ box.style.color='var(--bad)'; box.textContent='The reverse complement only works for plain DNA; do not include the <EGFP> label.'; return; } t = rc(t); }
+  writeClip(t); box.style.color='var(--ok)';
+  box.textContent = `Copied ${kind==='r'?'reverse complement':'forward'} (${t.replace(/[^ACGT]/g,'').length} nt): ` + (t.length>70 ? t.slice(0,32)+' … '+t.slice(-32) : t) + '  → now paste (Ctrl+V) into the box below.';
+}
+function legend(items){ $('legend').innerHTML = items.map(([c,t,k]) => `<span><i style="background:var(${c})${k==='line'?';height:3px':''}"></i>${t}</span>`).join(''); }
+
+/* =====================================================================
+   VIEW SETUP PER STEP  (what the sequence viewer shows)
+   ===================================================================== */
+function wtView(extra){
+  const marks=[{from:INS,to:INS+3,track:'fill',color:'--c-stop'}], bnds=[], leg=[['--c-stop','stop codon (TAA)']];
+  if (S.ins != null){ bnds.push({at:S.ins, color:'--c-ins'}); leg.push(['--c-ins','insertion site','line']); }
+  if (S.pam){ marks.push({from:S.pam.s, to:S.pam.s+3, track:'fill', color:'--c-pam'}); leg.push(['--c-pam','PAM']); }
+  if (S.guide){ marks.push({from:S.pam.proto[0], to:S.pam.proto[1], track:'u1', color:'--c-guide'}); leg.push(['--c-guide','guide RNA target (protospacer)']); }
+  if (S.cut != null){ bnds.push({at:S.cut, color:'--c-cut', dash:true}); leg.push(['--c-cut','Cas9 cut','line']); }
+  if (extra && extra.marks) marks.push(...extra.marks);
+  return {seq:WT, segs:[(extra && extra.seg) || [INS-200, INS+200]], marks, bnds, leg, labels:[{at:INS, text:'STOP', color:'--c-ins'}]};
+}
+function editedView(){
+  const seq = editedGenome(S.mut), marks=[{from:INS,to:INS+GFP.length,track:'fill',color:'--c-gfp'}], bnds=[], leg=[['--c-gfp','EGFP insert']];
+  if (S.pam){ const s = S.pam.s + (S.pam.s >= INS ? GFP.length : 0); if(!pamSpansInsertion(S.pam)){ marks.push({from:s,to:s+3,track:'fill',color:'--c-pam'}); leg.push(['--c-pam','PAM']); } }
+  if (S.mut){ const p = S.mut.pos + (S.mut.pos >= INS ? GFP.length : 0); marks.push({from:p,to:p+1,track:'fill',color:'--c-mut'}); leg.push(['--c-mut','mutated base']); }
+  return {seq, segs:[[INS-200, INS+60],[INS+GFP.length-60, INS+GFP.length+200]], marks, bnds, leg, gapLabel:'EGFP'};
+}
+function setView(v, title, help, v2, title2){
+  $('viewtitle').textContent = title; $('viewhelp').textContent = help || '';
+  renderViewer($('viewer'), v);
+  const w = $('view2wrap');
+  if (v2){ w.style.display=''; $('viewtitle2').textContent = title2 || ''; renderViewer($('viewer2'), v2); } else { w.style.display='none'; $('viewer2').innerHTML=''; }
+  COPYMODE = !!(v.copy || (v2 && v2.copy)); $('copybar').style.display = COPYMODE ? '' : 'none'; $('copymsg').textContent=''; updateSel();
+  const seen = new Map(); [...(v.leg||[]), ...((v2&&v2.leg)||[])].forEach(x => seen.set(x[1], x)); legend([...seen.values()]);
+}
+
+/* =====================================================================
+   STEP CONTENT
+   ===================================================================== */
+const stepCard = $('stepcard');
+function msg(kind, html){ return `<div class="msg ${kind}">${html}</div>`; }
+function fb(step){ return FB[step] || ''; }
+function solBox(step, html){ return `<details ${S.solShown[step]?'open':''}><summary>Show the solution</summary><div style="margin-top:6px">${html}</div></details>`; }
+function nav(canNext, nextLabel){ return `<div class="nav"><button id="bBack" ${S.step===0?'disabled':''}>← Back</button><button class="primary" id="bNext" ${canNext?'':'disabled'}>${nextLabel||'Next →'}</button></div>`; }
+function bindNav(){ const n=$('bNext'), b=$('bBack'); if(n) n.onclick=()=>go(S.step+1); if(b) b.onclick=()=>go(S.step-1); }
+function go(k){ S.step = Math.max(0, Math.min(STEPS.length-1, k)); save(); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+function mark(step){ S.done[step]=true; save(); }
+
+const R = [];
+/* ---- 0: goal ---- */
+R[0] = () => {
+  const bar = (()=>{ const W=860,H=60,sc=W/WT.length; let g=`<line x1="0" y1="30" x2="${W}" y2="30" stroke="currentColor" stroke-opacity=".4"/>`;
+    for (const [a,b,l] of EXONS) g += `<rect x="${a*sc}" y="20" width="${Math.max(2,(b-a)*sc)}" height="20" fill="#0b6e8f" opacity=".8"/><text x="${a*sc}" y="14" font-size="10" fill="currentColor">${l}</text>`;
+    g += `<rect x="${STOP_START*sc-1}" y="16" width="3" height="28" fill="#d93025"/><text x="${STOP_START*sc-60}" y="56" font-size="10" fill="#d93025">STOP codon (8760–8762)</text>`;
+    return `<svg viewBox="0 0 ${W} 64" style="width:100%;height:auto">${g}</svg>`; })();
+  return `<h2>The goal</h2>
+  <p>You want to tag the C. elegans gene <i>vhp-1</i> with <b>GFP</b>, so that the VHP-1 protein carries GFP at its C-terminus. With CRISPR/Cas9 you will design the three things you need to order:</p>
+  <ol><li>a <b>guide RNA (crRNA)</b> that makes Cas9 cut close to the insertion site,</li><li>a <b>repair template</b> (5′ HR1 – EGFP – HR2 3′) for homologous recombination,</li><li><b>primers</b> to check by PCR that GFP has been inserted.</li></ol>
+  ${bar}
+  <p class="sub">Genomic <i>vhp-1</i> sequence (9344 bp, unspliced + UTRs), as in the file vhp-1.ape. Red: stop codon.</p>
+  <p>Work through the steps one after another. In the sequence view below, the <b>upper strand is 5′→3′</b> and the lower one is its complement (3′→5′). You can click in the sequence, type sequences, and get feedback after every step. No installation needed.</p>
+  ${nav(true,'Start →')}`;
+};
+
+/* ---- 1: insertion site ---- */
+R[1] = () => {
+  const ok = S.ins != null && S.gfpStop != null;
+  let h = `<h2>1 · Where should GFP be inserted?</h2>
+  <p>For a <b>C-terminal tag</b>, EGFP must be placed in the reading frame of VHP-1 so that the protein ends with GFP. <b>Click in the sequence below on the position (between two bases) where EGFP should be inserted.</b></p>
+  <p class="sub">Hint: the <b style="background:var(--c-stop);padding:0 4px;border-radius:3px">stop codon (TAA)</b> is highlighted in red in the sequence below. The reading frame of the last exon ends there.</p>${fb(1)}`;
+  if (S.ins != null){
+    const up = WT.slice(INS-15,INS), dn = WT.slice(INS,INS+9);
+    h += `<hr style="border:0;border-top:1px solid var(--line);margin:12px 0">
+    <p><b>Question:</b> The EGFP sequence file ends with a stop codon (…CTG TAC AAG <b>TAA</b>). Should the inserted EGFP keep its own stop codon?</p>
+    <div class="row"><button data-stop="keep">Keep it (insert 720 bp)</button><button data-stop="remove">Remove it (insert 717 bp)</button></div>${fb('1b')}`;
+    if (S.gfpStop === 'remove'){
+      const edited = WT.slice(INS-15,INS) + GFP + WT.slice(INS, INS+9);
+      h += `<p style="margin-top:10px"><b>Protein check (C-terminus of the edited gene):</b></p>
+      <div class="seqbox">…${tr(WT.slice(INS-15,INS)).split('').join(' ')}  <span class="gf">[${tr(GFP).slice(0,4).split('').join(' ')} … ${tr(GFP).slice(-4).split('').join(' ')}]</span>  *<br>Native C-terminus: …${tr(WT.slice(INS-15,INS)).split('').join(' ')} *</div>
+      <p class="sub" style="margin-top:6px">EGFP (239 codons, 717 bp) is a multiple of 3, so the reading frame stays correct and VHP-1 now ends with EGFP followed by the original stop codon.</p>`;
+    }
+  }
+  h += solBox(1, `Insert EGFP (without its stop codon, 717 bp) <b>immediately in front of the stop codon TAA</b> (between positions 8759 and 8760). The boundary is marked in red in the sequence.`);
+  return h + nav(ok);
+};
+function pickIns(b){
+  if (b === INS){ S.ins = b; FB[1] = msg('ok', 'Correct: right in front of the stop codon TAA, at a codon boundary, so GFP stays in frame.'); mark(1); }
+  else {
+    const dist = b - INS, why = (b > INS && b < INS+3) ? 'This is inside the stop codon.' : b > INS ? 'This is behind the stop codon, so the protein would end before GFP and GFP would not be translated as part of it.' : (((INS-b)%3) ? 'This position is not at a codon boundary, so EGFP would be out of frame.' : 'This would insert GFP inside the protein, not at the C-terminus.');
+    FB[1] = msg('bad', `Not quite: ${why} Try again (the stop codon is at 8760–8762).`); S.ins = null; }
+  save(); render();
+}
+
+/* ---- 2: PAM ---- */
+R[2] = () => {
+  const c = candidatePams(30);
+  let h = `<h2>2 · Find a PAM site near the insertion point</h2>
+  <p>Cas9 needs a <b>PAM</b>, <code>5′-NGG-3′</code>, directly next to the target. The guide RNA is the 20 bases <b>5′ of the PAM</b>, and Cas9 cuts <b>3 bp 5′ of the PAM</b> (between the 3rd and 4th last base of the guide). The PAM can lie on either strand: on the lower strand it appears as <code>CCN</code> in the upper sequence.</p>
+  <p><b>Click in the upper sequence on the first base of a PAM</b> (the 3 bases are highlighted). Choose it such that the <b>cut site is as close as possible to the insertion site</b>, because the editing efficiency drops quickly with distance.</p>${fb(2)}`;
+  if (S.pam){
+    const p = S.pam, d = Math.abs(p.cut-INS);
+    h += `<div class="msg info"><b>Selected PAM:</b> <code>${esc(p.pam)}</code> on the ${p.strand==='+'?'upper (+)':'lower (−)'} strand, positions ${p.s+1}–${p.s+3}. The cut would be <b>${d} bp</b> from the insertion site${d===BEST.dist?' (the closest possible)':''}.</div>`;
+  }
+  h += `<details ${S.solShown[2]?'open':''}><summary>Show all PAMs within 30 bp of the insertion site</summary><table class="t" style="margin-top:6px"><tr><th>PAM (5′→3′)</th><th>Strand</th><th>Position</th><th>Distance cut ↔ insertion</th></tr>${c.map(x=>`<tr><td class="mono">${x.pam}</td><td>${x.strand==='+'?'upper':'lower'}</td><td>${x.s+1}–${x.s+3}</td><td>${x.dist} bp</td></tr>`).join('')}</table>
+  <p class="sub">The best choice is the lower-strand PAM <code>${BEST.pam}</code> (upper sequence <code>${WT.slice(BEST.s,BEST.s+3)}</code>) at ${BEST.s+1}–${BEST.s+3}.</p></details>`;
+  return h + nav(!!S.pam);
+};
+function pickPam(i){
+  const st = pamAt(i);
+  if (!st){ FB[2] = msg('bad', `<code>${WT.slice(i,i+3)}</code> is not a PAM: look for <code>NGG</code> in the upper strand, or <code>CCN</code> (= NGG on the lower strand).`); S.pam=null; S.guide=null; S.cut=null; }
+  else {
+    const pi = pamInfo(i, st), d = Math.abs(pi.cut-INS);
+    if (pi.proto[0] < 0) { FB[2]=msg('bad','Too close to the end of the sequence.'); }
+    else if (d > 20){ S.pam=null; FB[2] = msg('warn', `Valid PAM (<code>${pi.pam}</code>), but the cut would be ${d} bp from the insertion site. Homology-directed repair works best within about 10 bp, so look for a closer PAM.`); }
+    else { S.pam = pi; S.guide=null; S.cut=null; S.mut=null; FB[2] = msg('ok', d===BEST.dist ? 'Excellent: this is the closest PAM, you chose well.' : `Valid PAM, cut ${d} bp from the insertion site. (A closer one exists: show all PAMs below if you want to compare.)`); mark(2); }
+  }
+  save(); render();
+}
+
+/* ---- 3: guide ---- */
+R[3] = () => {
+  const p = S.pam;
+  let h = `<h2>3 · Write the guide RNA sequence</h2>
+  <p>The guide RNA is the <b>20 bases 5′ of the PAM</b> <i>on the strand that carries the PAM</i>. It has to be written <b>5′→3′</b>. Check the sequence view: for a PAM on the lower strand you have to read the <b>complement strand</b> (or reverse-complement the upper sequence).</p>
+  <p>Type the 20-nt guide (as DNA, T instead of U):</p>
+  <input type="text" id="inGuide" placeholder="5′-NNNNNNNNNNNNNNNNNNNN-3′" value="${esc(S.guideIn||'')}" spellcheck="false" autocomplete="off">
+  <div class="row" style="margin-top:8px"><button class="primary" id="bGuide">Check</button></div>${fb(3)}`;
+  h += solBox(3, `<code>${p.guide}</code> (5′→3′), followed by the PAM <code>${p.pam}</code>. ${p.strand==='-'?`The PAM is on the lower strand, so the guide is the <b>reverse complement</b> of upper bases ${p.proto[0]+1}–${p.proto[1]}.`:`It is identical to upper bases ${p.proto[0]+1}–${p.proto[1]}.`}`);
+  return h + nav(!!S.guide);
+};
+function checkGuide(){
+  const g = clean($('inGuide').value); S.guideIn = $('inGuide').value; const p = S.pam;
+  if (g.length !== 20) FB[3] = msg('bad', `The guide must be exactly 20 bases (yours: ${g.length}).`);
+  else if (g === p.guide){ S.guide = g; FB[3] = msg('ok', 'Correct! First element of your CRISPR design completed. The target is underlined in blue in the sequence.'); mark(3); }
+  else if (g === rc(p.guide)) FB[3] = msg('bad', 'Right sequence, wrong direction: you gave the reverse complement. A guide is read 5′→3′ on the strand that carries the PAM.');
+  else if (g === (p.strand==='-' ? WT.slice(p.proto[0],p.proto[1]) : rc(WT.slice(p.proto[0],p.proto[1])))) FB[3] = msg('bad', p.strand==='-' ? 'You copied the upper strand. Your PAM is on the lower strand (CCN above), so the guide must be taken from the lower strand (reverse complement).' : 'You gave the reverse complement; the PAM is on the upper strand here.');
+  else if (g.length===20 && (WT.indexOf(g)>=0 || WT.indexOf(rc(g))>=0)) FB[3] = msg('bad', 'This sequence occurs in vhp-1, but not at the 20 bases next to your PAM. Count 20 bases away from the PAM, on the PAM side 5′ of it.');
+  else FB[3] = msg('bad', 'This does not match the sequence next to your PAM. Check strand, orientation and the 20-base length.');
+  save(); render();
+}
+
+/* ---- 4: cut site ---- */
+R[4] = () => {
+  const p = S.pam;
+  let h = `<h2>4 · Where does Cas9 cut?</h2>
+  <p>Cas9 cuts <b>between the 3rd and the 4th base</b> counted from the PAM-proximal end of the protospacer (3 bp 5′ of the PAM). <b>Click in the sequence on the position (between two bases) where Cas9 cuts.</b></p>${fb(4)}`;
+  if (S.cut != null){
+    const a = WT.slice(S.cut-11,S.cut), b = WT.slice(S.cut,S.cut+12);
+    h += `<p><b>Cut site in the sequence</b> (upper strand): <code>${a}*${b.toLowerCase()}</code></p><p>Distance cut ↔ insertion site: <b>${Math.abs(S.cut-INS)} bp</b>.</p>`;
+  }
+  h += solBox(4, `Cut between positions ${p.cut} and ${p.cut+1}: <code>${WT.slice(p.cut-11,p.cut)}*${WT.slice(p.cut,p.cut+12).toLowerCase()}</code>`);
+  return h + nav(S.cut != null);
+};
+function pickCut(b){
+  const p = S.pam;
+  if (b === p.cut){ S.cut = b; FB[4] = msg('ok', 'Correct. Both strands are cut here (blunt double-strand break).'); mark(4); }
+  else { S.cut = null; FB[4] = msg('bad', Math.abs(b-p.cut)<=3 ? 'Close! Count again: the cut is 3 bp from the PAM, i.e. between the 3rd and 4th base from the PAM end of the guide.' : 'Not there. Find the guide (blue) and its PAM (yellow); Cas9 cuts 3 bases away from the PAM, inside the protospacer.'); }
+  save(); render();
+}
+
+/* ---- 5: mutate PAM ---- */
+R[5] = () => {
+  const p = S.pam;
+  let h = `<h2>5 · Protect the edited genome: mutate the PAM</h2>
+  <p>After the repair, the guide must not find its target any more, otherwise Cas9 keeps cutting the edited allele. Therefore the repair template should <b>destroy the PAM without changing the protein</b> (use a synonymous codon).</p>`;
+  if (pamSpansInsertion(p)){
+    mark(5); return h + msg('ok','Your PAM spans the insertion site, so inserting EGFP already separates the PAM bases. Nothing to mutate!') + nav(true);
+  }
+  h += `<p>The edited sequence is shown below (EGFP in green). <b>Click on a base inside your PAM</b> (yellow) to select it, then choose the new base.</p>`;
+  if (S.mutDraft != null){
+    const pos = S.mutDraft, orig = WT[pos], ci = aaEffect(pos, orig);
+    h += `<div class="msg info">Selected base: position <b>${pos+1}</b> (<code>${orig}</code>) ${ci.where==='coding'?`in the codon <code>${ci.wtc}</code> (${ci.wtaa}).`:ci.where==='stop'?'in the stop codon.':'in the 3′ UTR.'}<br>Change it to: ${['A','C','G','T'].filter(x=>x!==orig).map(x=>`<button data-mut="${x}">${x}</button>`).join(' ')}</div>`;
+  }
+  h += fb(5);
+  if (S.mut){ const m=S.mut, ce=aaEffect(m.pos,m.base); h += `<p class="sub">Mutation: ${m.pos+1} ${WT[m.pos]}→${m.base}${ce.where==='coding'?` (codon ${ce.wtc}→${ce.nc}, ${ce.wtaa}→${ce.naa})`:''}</p>`; }
+  const alts = []; for (let q=p.s;q<p.s+3;q++) for (const b of 'ACGT'){ if(b===WT[q]) continue; const probe={pos:q,base:b}; if (pamBroken(p,probe) && aaEffect(q,b).same) alts.push(`${q+1}: ${WT[q]}→${b}${aaEffect(q,b).where==='coding'?` (${aaEffect(q,b).wtc}→${aaEffect(q,b).nc}, ${aaEffect(q,b).wtaa})`:''}`); }
+  h += solBox(5, alts.length ? `Possible silent PAM mutations: <code>${alts.join('</code>, <code>')}</code>. Changing the N of the PAM does not help, and a change of the G's (or C's on the upper strand) must not alter the amino acid (check a codon table).` : 'No silent PAM mutation exists for this PAM. Choose a different PAM.');
+  return h + nav(!!S.mut);
+};
+function applyMutation(base){
+  const pos = S.mutDraft, p = S.pam, m = {pos, base};
+  const e = aaEffect(pos, base), broken = pamBroken(p, m), inPam = pos>=p.s && pos<p.s+3;
+  let out = '';
+  out += broken ? msg('ok','✔ The PAM is destroyed: the guide cannot direct Cas9 to the edited allele.') : msg('bad', inPam ? '✘ The PAM is still intact: ' + (p.strand==='+' ? 'NGG needs both G; change one of the two G.' : 'CCN needs both C (upper strand); change one of the two C.') : '✘ This base is not part of the PAM.');
+  if (e.where==='coding') out += e.same ? msg('ok', `✔ Silent: codon ${e.wtc} (${e.wtaa}) → ${e.nc} (${e.naa}); the protein is unchanged.`) : msg('bad', `✘ The codon ${e.wtc} (${e.wtaa}) would become ${e.nc} (${e.naa}): the protein changes. Choose another base/position.`);
+  else if (e.where==='stop') out += e.same ? msg('ok','✔ Still a stop codon.') : msg('bad', `✘ ${e.wtc}→${e.nc} destroys the stop codon.`);
+  else out += msg('warn','This base is in the 3′ UTR: the protein is unchanged (but UTRs can carry regulatory elements).');
+  if (broken && e.same && inPam){ S.mut = m; mark(5); } else S.mut = null;
+  FB[5] = out; save(); render();
+}
+
+/* ---- 6: repair template ---- */
+function destSeq(){ return applyMut(WT, S.mut); }
+R[6] = () => {
+  const arms = [50,50];
+  let h = `<h2>6 · Build the repair template</h2>
+  <p>The upper box shows the <b>original</b> sequence, the lower box the <b>destination</b>: the same gene with EGFP inserted (shown as <code>&lt;EGFP&gt;</code>) and with your PAM mutation from step 5 (orange).</p>
+  <p><b>Task:</b> generate the <b>repair template</b> with <b>50 bp homology arms</b> on both sides of EGFP, the downstream arm starting with the stop codon. Paste the sequence into the box below, writing <code>&lt;EGFP&gt;</code> in place of the GFP sequence. Use the copy tools under the sequence if you like.</p>
+  <textarea id="inTmpl" rows="3" class="mono" spellcheck="false" placeholder="paste HR1 &lt;EGFP&gt; HR2 here" style="width:100%">${esc(S.tmplIn||'')}</textarea>
+  <div class="row" style="margin-top:8px"><button class="primary" id="bTmpl">Check template</button></div>${fb(6)}`;
+  h += solBox(6, '50 bp upstream of the insertion site, then &lt;EGFP&gt; (717 bp, no stop codon), then 50 bp downstream beginning with the stop codon TAA. Total 817 bp. The base changed in step 5 lies in the upstream arm and must be present in your template.');
+  return h + nav(!!S.done[6]);
+};
+function checkTmpl(){
+  const raw = $('inTmpl').value; S.tmplIn = raw; S.done[6] = false;
+  const dest = destSeq(); const t = raw.replace(/[\s\d]/g,'').toUpperCase(); const parts = t.split('<EGFP>');
+  let out='';
+  if (!t) out = msg('bad','The box is empty. Select the sequence, press <i>Copy forward</i> and paste (Ctrl+V) here.');
+  else if (parts.length < 2) out = msg('bad','The <b>&lt;EGFP&gt;</b> label is missing: select from HR1 through the &lt;EGFP&gt; label to HR2.');
+  else if (parts.length > 2) out = msg('bad','There is more than one &lt;EGFP&gt; label.');
+  else {
+    const [l,r] = parts;
+    if (/[^ACGT]/.test(l+r)) out = msg('bad','Besides the one &lt;EGFP&gt; label, only the bases A, C, G, T are allowed.');
+    else if (l.length !== 50 || r.length !== 50) out = msg('bad',`The homology arms must be 50 bp each (yours: ${l.length} bp before and ${r.length} bp after &lt;EGFP&gt;).`);
+    else {
+      const eL = dest.slice(INS-l.length, INS), eR = dest.slice(INS, INS+r.length), pr = [];
+      if (l !== eL){
+        if (S.mut && l === WT.slice(INS-l.length, INS)) pr.push('<b>HR1</b> is the <b>original</b> sequence: it lacks the PAM mutation. Copy from the lower (destination) sequence.');
+        else if (dest.includes(rc(l))) pr.push('<b>HR1</b> is the reverse complement. The template is written in the same direction as the gene: use <i>Copy forward</i>.');
+        else if (dest.includes(l)) pr.push('<b>HR1</b> belongs to the gene but does not end directly in front of &lt;EGFP&gt;.');
+        else pr.push('<b>HR1</b> (before &lt;EGFP&gt;) does not match the destination sequence.');
+      }
+      if (r !== eR){
+        if (S.mut && r === WT.slice(INS, INS+r.length)) pr.push('<b>HR2</b> is the original sequence, without the PAM mutation.');
+        else if (dest.includes(rc(r))) pr.push('<b>HR2</b> is the reverse complement: use <i>Copy forward</i>.');
+        else if (dest.includes(r)) pr.push('<b>HR2</b> does not start directly after &lt;EGFP&gt; (it must begin with the stop codon TAA).');
+        else pr.push('<b>HR2</b> (after &lt;EGFP&gt;) does not match the destination sequence.');
+      }
+      if (!pr.length && S.mut && !(S.mut.pos >= INS-l.length && S.mut.pos < INS+r.length)) pr.push('Your PAM mutation lies outside the homology arms, so the edited allele could be cut again. Make the arms longer.');
+      if (pr.length) out = pr.map(x => msg('bad','✘ '+x)).join('');
+      else { S.L1 = l.length; S.L2 = r.length; S.done[6] = true;
+        out = msg('ok',`✔ Correct: HR1 (${l.length} bp) + EGFP (717 bp) + HR2 (${r.length} bp) = <b>${l.length+GFP.length+r.length} bp</b>.${S.mut?' The PAM mutation is inside the template, so the edited allele cannot be cut again.':''}`); }
+    }
+  }
+  FB[6] = out; save(); render();
+}
+
+/* ---- 7: primers to amplify template ---- */
+R[7] = () => {
+  const t = buildTemplate(S.L1,S.L2,S.mut);
+  let h = `<h2>7 · Primers to produce the repair template by PCR</h2>
+  <p>You make the template by PCR from a plasmid that contains EGFP. The <b>homology arms are added as 5′ tails</b> of the primers; the 3′ end of each primer anneals to EGFP.</p>
+  <ul><li><b>Forward primer</b> (5′→3′) = HR1 + the first 15–30 bases of EGFP (starting with ATG)</li><li><b>Reverse primer</b> (5′→3′) = reverse complement of HR2 + reverse complement of the last 15–30 bases of EGFP (without the stop codon)</li></ul>
+  <p><b>Task:</b> in the sequence of your template (above), select a stretch and copy it <i>forward</i> (forward primer) or as <i>reverse complement</i> (reverse primer), then paste it into the boxes. The primer is one continuous sequence: e.g. HR1 and the start of EGFP lie next to each other in the template.</p>
+  <label class="f">Forward primer (5′→3′)</label><input type="text" id="inAF" value="${esc(S.ampF)}" spellcheck="false" autocomplete="off">
+  <label class="f">Reverse primer (5′→3′)</label><input type="text" id="inAR" value="${esc(S.ampR)}" spellcheck="false" autocomplete="off">
+  <div class="row" style="margin-top:10px"><button class="primary" id="bAmp">Check primers</button></div>${fb(7)}`;
+  h += solBox(7, `Forward: <span class="seqbox" style="display:block"><span class="hr1">${t.hr1}</span><span class="gf">${GFP.slice(0,20)}</span></span>Reverse: <span class="seqbox" style="display:block"><span class="hr2">${rc(t.hr2)}</span><span class="gf">${rc(GFP.slice(-20))}</span></span>The PCR product is ${t.hr1.length+GFP.length+t.hr2.length} bp long.`);
+  return h + nav(!!S.done[7]);
+};
+function checkAmp(){
+  const t = buildTemplate(S.L1,S.L2,S.mut); const f = clean($('inAF').value), r = clean($('inAR').value); S.ampF=$('inAF').value; S.ampR=$('inAR').value;
+  const wtHR1 = WT.slice(INS-S.L1, INS), wtHR2 = WT.slice(INS, INS+S.L2);
+  const res = [];
+  // forward
+  let okF=false, okR=false;
+  if (!f) res.push(msg('bad','Enter a forward primer.'));
+  else if (f.startsWith(t.hr1)){ const a=f.slice(t.hr1.length); if (a.length>=15 && a.length<=30 && GFP.startsWith(a)){ okF=true; res.push(msg('ok',`Forward primer OK: HR1 tail (${t.hr1.length} nt) + ${a.length} nt annealing to the start of EGFP (Tm ≈ ${tmOf(a)} °C).`)); } else res.push(msg('bad', a.length<15 ? 'The part annealing to EGFP is too short (use 15–30 nt starting at the ATG of EGFP).' : 'After HR1 the primer must continue with the first bases of EGFP (ATGGTGAGC…).')); }
+  else if (S.mut && f.startsWith(wtHR1)) res.push(msg('bad','Your forward primer carries the <b>original</b> PAM. Did you forget to include the PAM mutation from step 5 in HR1?'));
+  else if (GFP.startsWith(f.slice(0,20))) res.push(msg('bad','Your forward primer anneals to EGFP but has no HR1 tail. Add the homology arm HR1 at the 5′ end.'));
+  else res.push(msg('bad','The forward primer does not start with HR1 (the genomic sequence upstream of the insertion site, written 5′→3′).'));
+  // reverse
+  const rh = rc(t.hr2);
+  if (!r) res.push(msg('bad','Enter a reverse primer.'));
+  else if (r.startsWith(rh)){ const a=r.slice(rh.length), g = rc(GFP.slice(-a.length)); if (a.length>=15 && a.length<=30 && a===g){ okR=true; res.push(msg('ok',`Reverse primer OK: reverse complement of HR2 (${rh.length} nt) + ${a.length} nt annealing to the end of EGFP (Tm ≈ ${tmOf(a)} °C).`)); } else res.push(msg('bad', a.length<15 ? 'The part annealing to EGFP is too short.' : 'After the HR2 part, the primer must anneal to the 3′ end of EGFP (reverse complement of …CTGTACAAG, without the stop codon).')); }
+  else if (r.startsWith(wtHR2)) res.push(msg('bad','The reverse primer must be the <b>reverse complement</b> of HR2: it is written 5′→3′ on the opposite strand.'));
+  else if (rc(r).endsWith(t.hr2) || rc(r).includes(t.hr2.slice(0,30))) res.push(msg('bad','Check the order: the reverse primer starts (5′) with the reverse complement of HR2 and ends (3′) with the part annealing to EGFP.'));
+  else res.push(msg('bad','The reverse primer does not start with the reverse complement of HR2.'));
+  if (okF && okR){ S.done[7]=true; res.push(msg('ok',`Both primers work: the PCR product has HR1 + EGFP + HR2 = <b>${t.hr1.length+GFP.length+t.hr2.length} bp</b>.`)); } else S.done[7]=false;
+  FB[7]=res.join(''); save(); render();
+}
+
+/* ---- 8: genotyping ---- */
+const PRIM = [['g1','Primer 1','--c-p1'],['g2','Primer 2','--c-p3'],['g3','Primer 3','--c-p2']];
+const pairProducts = (tpl,a,b,maxLen) => pcr(tpl,a,b,maxLen).concat(pcr(tpl,b,a,maxLen));
+function allProducts(tpl, ps, maxLen){ const o=[]; for (let i=0;i<ps.length;i++) for (let j=i+1;j<ps.length;j++) o.push(...pairProducts(tpl,ps[i],ps[j],maxLen)); return o.sort((x,y)=>x-y); }
+function describePrimer(s, ed){
+  const fw = findAll(ed,s), rv = findAll(ed,rc(s)), n = fw.length+rv.length;
+  if (!n) return {n:0};
+  const pos = fw.length?fw[0]:rv[0], end = pos+s.length, G = GFP.length;
+  let kind;
+  if (pos>=INS && end<=INS+G) kind='egfp'; else if (end<=INS-S.L1) kind='left'; else if (pos>=INS+G+S.L2) kind='right'; else if (end<=INS) kind='armL'; else if (pos>=INS+G) kind='armR'; else kind='junction';
+  return {n, pos, end, dir: fw.length?'+':'-', kind};
+}
+const KIND_TXT = {egfp:'inside EGFP', left:'genomic, upstream of HR1 (outside the arm)', right:'genomic, downstream of HR2 (outside the arm)'};
+function genoCheck(){
+  const ed = editedGenome(S.mut), out = {ok:true, msgs:[], info:{}}; const D = {};
+  for (const [k,label] of PRIM){
+    const s = clean(S[k]);
+    if (!s){ out.ok=false; out.msgs.push(msg('warn',`${label}: not entered yet.`)); continue; }
+    if (s.length<15 || s.length>30){ out.ok=false; out.msgs.push(msg('bad',`<b>${label}</b> – ${s.length} nt. Primers should be 15–30 nt long.`)); continue; }
+    const d = describePrimer(s, ed); let m = '', good = false;
+    if (!d.n) m = 'does not match the genome or the edited gene (check that you copied from the sequence shown).';
+    else if (d.n>1) m = 'binds at several places: choose a unique sequence.';
+    else if (d.kind==='armL' || d.kind==='armR') m = 'overlaps the homology arm. Leftover repair template (or extrachromosomal copies) would give a product as well. Place genomic primers <b>outside the homology arms</b>.';
+    else if (d.kind==='junction') m = 'spans the border between genome and EGFP. A primer must lie either completely inside EGFP or completely outside the homology arms.';
+    else { good = true; D[k] = d; m = `OK (${KIND_TXT[d.kind]}; ${d.dir==='+'?'forward':'reverse'}; ${gcPct(s)}% GC, Tm ≈ ${tmOf(s)} °C).`; }
+    out.msgs.push(msg(good?'ok':'bad', `<b>${label}</b> ${good?'':'– '}${m}`)); if (!good) out.ok=false;
+  }
+  if (out.ok){
+    const kinds = PRIM.map(([k]) => D[k].kind).sort().join(',');
+    if (kinds !== 'egfp,left,right'){ out.ok=false; out.msgs.push(msg('bad','You need <b>three different primers</b>: one in the genome upstream of HR1, one inside EGFP, and one in the genome downstream of HR2. Together they must give a band specific for the wild-type locus and a band specific for the modified locus.')); }
+    else {
+      const byKind = {}; PRIM.forEach(([k]) => byKind[D[k].kind] = clean(S[k]));
+      const L = byKind.left, E = byKind.egfp, Rr = byKind.right, dL = describePrimer(L,ed), dE = describePrimer(E,ed), dR = describePrimer(Rr,ed);
+      const wrong = [];
+      if (dL.dir!=='+') wrong.push('The upstream genomic primer must be a <b>forward</b> primer (same sequence as the upper strand).');
+      if (dR.dir!=='-') wrong.push('The downstream genomic primer must be a <b>reverse</b> primer (reverse complement of the upper strand).');
+      if (wrong.length){ out.ok=false; wrong.forEach(w => out.msgs.push(msg('bad',w))); }
+      else {
+        const spec = pairProducts([ed], E, dE.dir==='-'?L:Rr, AMP_MAX), flankWT = pairProducts([WT],L,Rr,AMP_MAX), flankEd = pairProducts([ed],L,Rr,AMP_MAX);
+        if (!spec.length){ out.ok=false; out.msgs.push(msg('bad','The primer inside EGFP does not form a product with a genomic primer: it must point towards one of them (a <b>reverse</b> EGFP primer pairs with the upstream forward primer; a <b>forward</b> EGFP primer pairs with the downstream reverse primer) and be less than '+AMP_MAX+' bp away.')); }
+        if (!flankWT.length){ out.ok=false; out.msgs.push(msg('bad',`The two genomic primers give no product on the wild-type locus (maximum assumed ${AMP_MAX} bp). Place them closer to the insertion site.`)); }
+        const wtAll = allProducts([WT],[L,E,Rr],AMP_MAX);
+        if (wtAll.length>1){ out.ok=false; out.msgs.push(msg('bad',`Wild-type DNA gives more than one band (${wtAll.join(', ')} bp).`)); }
+        if (out.ok){ const w = flankWT[0], sp = spec[0];
+          if (Math.abs(w-sp)<40){ out.ok=false; out.msgs.push(msg('bad',`The wild-type band (${w} bp) and the modified-specific band (${sp} bp) are too similar in size to be told apart on a gel. Choose primers so that the bands differ by at least 40 bp.`)); }
+          else { out.info = {spec:sp, wt:w, flankEd:flankEd}; out.msgs.push(msg('ok',`✔ Wild-type locus: <b>${w} bp</b> (the two genomic primers). Modified locus: a specific <b>${sp} bp</b> band that cannot arise from the original DNA${flankEd.length?`, plus a larger ${flankEd.join('/')} bp band from the two genomic primers across the insert`:''}.`)); } }
+      }
+    }
+  }
+  return out;
+}
+function solGeno(){
+  const ed = editedGenome(S.mut), G = GFP.length;
+  for (let off=10; off<120; off+=7) for (const L of [22,20,24]){
+    const l = WT.slice(INS-S.L1-off-L, INS-S.L1-off).toUpperCase();
+    const rs = INS+S.L2+off+10, r = rc(WT.slice(rs, rs+L));
+    for (let q=40; q<=G-40; q+=9){ const e = rc(GFP.slice(q,q+22));
+      if ([l,e,r].every(x=>describePrimer(x,ed).n===1 && gcPct(x)>=35 && gcPct(x)<=65)){
+        const sp = pairProducts([ed],e,l,AMP_MAX), fw = pairProducts([WT],l,r,AMP_MAX), fe = pairProducts([ed],l,r,AMP_MAX);
+        if (sp.length===1 && fw.length===1 && allProducts([WT],[l,e,r],AMP_MAX).length===1 && Math.abs(fw[0]-sp[0])>=40) return {l,e,r,spec:sp[0],wt:fw[0],fe:fe[0]}; } }
+  }
+  return null;
+}
+R[8] = () => {
+  const inp = PRIM.map(([k,l,c]) => `<label class="f" style="color:var(${c})">${l} (5′→3′)</label><input type="text" data-in="${k}" value="${esc(S[k]||'')}" spellcheck="false" autocomplete="off">`).join('');
+  let h = `<h2>8 · Primers to genotype the edited animals</h2>
+  <p>After injection you must check by PCR which animals carry the insertion. Design <b>three primers</b> (15–30 nt each) that are used together in one PCR and give a band <b>specific for the wild-type locus</b> and a band <b>specific for the modified locus</b>:</p>
+  <ul><li><b>two primers flanking</b> the insertion site, i.e. one upstream and one downstream of it, both <b>outside the homology arms</b>,</li><li><b>one primer inside GFP</b>.</li></ul>
+  <p>Why outside the arms? Leftover repair template or extrachromosomal copies contain the arms and would give a product with a primer lying inside them. The two flanking primers amplify the wild-type locus; the GFP primer pairs with one of them to amplify <b>only</b> the modified locus. <b>The modified-specific product must appear only when GFP is correctly inserted: the original DNA must not give it, nor any other (shorter or longer) product.</b></p>
+  <p><b>Task:</b> in the edited sequence below (EGFP in green, homology arms underlined; part of EGFP and of the sequence beyond the arms are shown), select a range, copy it <i>forward</i> or as <i>reverse complement</i>, and paste it into the primer boxes (in any order).</p>${inp}
+  <div class="row" style="margin-top:10px"><button class="primary" id="bGeno">Check primers</button></div>`;
+  const r = S.genoRes; if (r){ h += r.msgs.join(''); }
+  if (r && r.ok){
+    const P = PRIM.map(([k])=>clean(S[k])), wt=[WT], ed=[editedGenome(S.mut)], het=[WT,ed[0]];
+    const rxn = {wt:allProducts(wt,P,AMP_MAX), het:allProducts(het,P,AMP_MAX), hom:allProducts(ed,P,AMP_MAX)};
+    S.gelData = rxn; const fmt = a => a.length ? [...new Set(a)].join(' + ')+' bp' : 'no product';
+    h += `<p style="margin-top:12px"><b>Expected PCR products</b> (all three primers in one reaction, in-silico PCR):</p>
+    <table class="t"><tr><th>Wild type</th><th>Heterozygous</th><th>Homozygous edited</th></tr><tr><td>${fmt(rxn.wt)}</td><td>${fmt(rxn.het)}</td><td>${fmt(rxn.hom)}</td></tr></table>
+    <canvas id="gel" width="420" height="250" style="margin-top:10px"></canvas>`;
+    mark(8);
+  }
+  const sg = solGeno();
+  h += solBox(8, sg ? `One valid set: <code>${sg.l.toLowerCase()}</code> (forward, upstream of HR1), <code>${sg.e.toLowerCase()}</code> (reverse, inside EGFP), <code>${sg.r.toLowerCase()}</code> (reverse, downstream of HR2). Wild type: ${sg.wt} bp (outer pair). Modified: ${sg.spec} bp (outer forward + EGFP reverse)${sg.fe?` and a long ${sg.fe} bp band (outer pair across the insert)`:''}. Many other sets work, e.g. an EGFP forward primer paired with the downstream reverse primer.` : 'Choose one primer upstream of HR1, one inside EGFP and one downstream of HR2.');
+  return h + nav(!!S.done[8]);
+};
+function drawGel(){
+  const cv = $('gel'); if (!cv || !S.gelData) return; const g = cv.getContext('2d'), W=cv.width, H=cv.height;
+  g.fillStyle='#222'; g.fillRect(0,0,W,H);
+  const lanes = [['Ladder',null],['wild type',[...new Set(S.gelData.wt)]],['heterozyg.',[...new Set(S.gelData.het)]],['homozyg.',[...new Set(S.gelData.hom)]]];
+  const top=34, bot=H-14, lw=60, gap=24, x0=50, ladder=[3000,2000,1500,1000,750,500,300,200,100];
+  const y = bp => top + (bot-top)*(1 - (Math.log(bp)-Math.log(80))/(Math.log(4000)-Math.log(80)));
+  g.font='11px system-ui'; g.textAlign='center';
+  lanes.forEach(([lab,bands],i)=>{ const x = x0 + i*(lw+gap);
+    g.fillStyle='#bbb'; g.fillText(lab, x+lw/2, 16); g.fillStyle='#555'; g.fillRect(x, top-6, lw, 4);
+    if (bands===null){ g.fillStyle='#ccc'; ladder.forEach(b=>{ g.fillRect(x, y(b)-1.5, lw, 3); g.textAlign='right'; g.fillText(b, x-4, y(b)+4); g.textAlign='center'; }); }
+    else bands.forEach(b=>{ g.fillStyle='#fff'; g.fillRect(x, y(b)-2, lw, 4); g.fillStyle='#9fd'; g.font='10px system-ui'; g.fillText(b+' bp', x+lw/2, y(b)-5); g.font='11px system-ui'; }); });
+}
+
+/* ---- 9: result ---- */
+function resultText(){
+  const t = buildTemplate(S.L1,S.L2,S.mut), p = S.pam, f = clean(S.ampF), r = clean(S.ampR);
+  const tmpl = t.hr1.toLowerCase() + GFP.toUpperCase() + t.hr2.toLowerCase();
+  const ga = S.gelData || {wt:[],het:[],hom:[]};
+  const cs = WT.slice(S.cut-11,S.cut).toUpperCase() + '*' + WT.slice(S.cut,S.cut+12).toLowerCase();
+  return `guide RNA (5'->3'):\n${p.guide.toLowerCase()}   (PAM: ${p.pam})\n\ncut site:\n${cs}\n\nPAM mutation: ${S.mut ? `position ${S.mut.pos+1}, ${WT[S.mut.pos]}->${S.mut.base}` : 'PAM spans the insertion site (none needed)'}\n\nrepair template (HR1 ${S.L1} bp - EGFP ${GFP.length} bp - HR2 ${S.L2} bp = ${tmpl.length} bp):\n${tmpl}\n\nfwd primer to amplify template DNA:\n${f}\n\nreverse primer to amplify template DNA:\n${r}\n\ngenotyping primers (3 primers in one PCR):\n${clean(S.g1).toLowerCase()}\n${clean(S.g2).toLowerCase()}\n${clean(S.g3).toLowerCase()}\n\nexpected products:\nwild type: ${[...new Set(ga.wt||[])].join(', ')} bp\nedited allele: ${[...new Set(ga.hom||[])].join(', ')} bp\n`;
+}
+R[9] = () => {
+  const all = [1,2,3,4,5,6,7,8].every(k=>S.done[k]);
+  if (!all) return `<h2>Result</h2>` + msg('warn','Finish all previous steps first; your results will be collected here.') + nav(false);
+  const txt = resultText();
+  return `<h2>Congratulations!</h2>
+  <p>You have designed all parts of the CRISPR edit:</p>
+  <ol><li>the <b>guide RNA</b> (cut ${Math.abs(S.cut-INS)} bp from the insertion site),</li><li>the <b>repair template</b> with GFP, 2 homology arms and a silent PAM mutation,</li><li>the <b>primers</b> to make the template and the three genotyping primers.</li></ol>
+  <textarea id="outTxt" rows="22" readonly>${esc(txt)}</textarea>
+  <div class="row" style="margin-top:8px"><button class="primary" id="bCopy">Copy</button><button id="bDown">Download as .txt</button></div>
+  <p style="margin-top:12px">Next steps in the lab: load the guide RNA onto Cas9 protein, produce the donor template by PCR, and inject the mixture into the germline of a worm. If all goes well, the progeny of this worm express GFP-tagged VHP-1. Watch a successful injection: <a href="https://youtu.be/z--0U9YmYmk" target="_blank" rel="noopener">youtu.be/z--0U9YmYmk</a></p>` + nav(true,'Done');
+};
+
+/* =====================================================================
+   RENDER + EVENTS
+   ===================================================================== */
+function viewForStep(){
+  const k = S.step;
+  if (k===0) return setView(wtView(), 'vhp-1 sequence around the stop codon', 'Both strands are shown; upper strand = 5′→3′');
+  if (k===1) return (setView(Object.assign(wtView(), {mode:'bnd', onPick:pickIns}), 'Click where EGFP should be inserted', 'click between two bases'), void 0);
+  if (k===2) return setView(Object.assign(wtView(), {mode:'base', onPick:pickPam}), 'Click on the first base of a PAM', 'the 3 bases are selected');
+  if (k===4) return setView(Object.assign(wtView(), {mode:'bnd', onPick:pickCut}), 'Click where Cas9 cuts', 'click between two bases');
+  if (k===5){ const ev = editedView(); if (S.pam && !pamSpansInsertion(S.pam)) { return setView(Object.assign(ev, {mode:'base', onPick:i=>{ const wtPos = i>=INS+GFP.length ? i-GFP.length : (i>=INS ? -1 : i); if (wtPos<0 || wtPos<S.pam.s || wtPos>=S.pam.s+3) { FB[5]=msg('bad','Click on a base inside the yellow PAM.'); S.mutDraft=null; } else { S.mutDraft=wtPos; FB[5]=''; } render(); }}), 'Edited genome: select a base in the PAM', 'EGFP is inserted (green)'); } return setView(ev, 'Edited genome', 'EGFP inserted'); }
+  if (k===3){ const w = Object.assign(wtView(), {copy:true}); return setView(w, 'Sequence with PAM', 'guide = 20 bases 5′ of the PAM on the PAM strand; you can select and copy from here'); }
+  if (k===6){ const w = wtView({seg:[INS-110,INS+110]}); w.copy = true;
+    const d = destSeq(), marks=[{from:INS,to:INS+3,track:'fill',color:'--c-stop'}], leg=[['--c-stop','stop codon (TAA)']];
+    if (S.mut){ marks.push({from:S.mut.pos,to:S.mut.pos+1,track:'fill',color:'--c-mut'}); leg.push(['--c-mut','PAM mutation']); }
+    const v2 = {seq:d, segs:[[INS-110,INS+110]], marks, leg, tok:{pos:INS,text:'<EGFP>'}, copy:true};
+    return setView(w,'Original sequence','you can select here too, but the template must contain your PAM mutation', v2, 'Destination: EGFP inserted (<EGFP>), PAM mutated'); }
+  if (k===7){ const t = buildTemplate(S.L1,S.L2,S.mut), seq=t.hr1+t.gfp+t.hr2, n1=t.hr1.length, n2=n1+t.gfp.length; const f=clean(S.ampF), r=clean(S.ampR); const marks=[{from:0,to:n1,track:'u2',color:'--c-hr1'},{from:n1,to:n2,track:'fill',color:'--c-gfp'},{from:n2,to:seq.length,track:'u2',color:'--c-hr2'}];
+    if (S.done[7]){ marks.push({from:0,to:f.length,track:'u1',color:'--c-p1'},{from:seq.length-r.length,to:seq.length,track:'u1',color:'--c-p3'}); }
+    return setView({seq, segs:[[0,n1+100],[n2-100,seq.length]], marks, copy:true, leg:[['--c-hr1','HR1','line'],['--c-gfp','EGFP'],['--c-hr2','HR2','line'],['--c-p1','forward primer','line'],['--c-p3','reverse primer','line']], gapLabel:'EGFP'}, 'Your repair template', `${seq.length} bp; the middle of EGFP is hidden`); }
+  if (k===8){ const ev = editedGenome(S.mut), G=GFP.length, marks=[{from:INS,to:INS+G,track:'fill',color:'--c-gfp'},{from:INS-S.L1,to:INS,track:'u2',color:'--c-hr1'},{from:INS+G,to:INS+G+S.L2,track:'u2',color:'--c-hr2'}];
+    const leg=[['--c-gfp','EGFP'],['--c-hr1','HR1','line'],['--c-hr2','HR2','line']];
+    for (const [k2,l,c] of PRIM){ const s=clean(S[k2]); if(!s) continue; const a = findAll(ev,s), b = findAll(ev,rc(s)); const pos = a.length?a[0]:(b.length?b[0]:-1); if (pos>=0){ marks.push({from:pos,to:pos+s.length,track:'u1',color:c}); leg.push([c,l,'line']); } }
+    return setView({seq:ev, segs:[[INS-300,INS+150],[INS+G-150,INS+G+300]], marks, copy:true, leg, gapLabel:'EGFP'}, 'Edited genome (EGFP inserted)', 'select a range, then copy forward or reverse complement'); }
+  if (k===9) { $('viewer').innerHTML=''; legend([]); $('viewtitle').textContent='Your design'; $('viewhelp').textContent=''; }
+}
+function summary(){
+  const t = (n,v) => `<div>${n}</div><div>${v}</div>`; let h='';
+  h += t('Insertion site', S.ins!=null ? `in front of the stop codon (${INS}|${INS+1}), EGFP without stop` : '–');
+  h += t('PAM', S.pam ? `<code>${S.pam.pam}</code> (${S.pam.strand==='+'?'upper':'lower'} strand, ${S.pam.s+1}–${S.pam.s+3})` : '–');
+  h += t('Guide RNA', S.guide ? `<code>${S.guide.toLowerCase()}</code>` : '–');
+  h += t('Cut site', S.cut!=null ? `between ${S.cut} and ${S.cut+1} (${Math.abs(S.cut-INS)} bp from insertion)` : '–');
+  h += t('PAM mutation', S.done[5] ? (S.mut ? `${S.mut.pos+1} ${WT[S.mut.pos]}→${S.mut.base} (silent)` : 'not needed') : '–');
+  h += t('Repair template', S.done[6] ? `HR1 ${S.L1} + EGFP 717 + HR2 ${S.L2} = ${S.L1+717+S.L2} bp` : '–');
+  h += t('Template primers', S.done[7] ? 'designed ✔' : '–');
+  h += t('Genotyping primers', S.done[8] ? 'designed ✔' : '–');
+  $('summary').innerHTML = h;
+}
+function stepper(){
+  $('stepper').innerHTML = STEPS.map((n,i)=>{ const unlocked = i===0 || [1,2,3,4,5,6,7,8].filter(k=>k<i).every(k=>S.done[k]); const cls = (i===S.step?'cur':(S.done[i]?'done':'')); return `<button class="pill ${cls}" data-go="${i}" ${unlocked?'':'disabled'}>${i} ${n}</button>`; }).join('');
+}
+function render(){
+  if (S.step===5 && S.pam && pamSpansInsertion(S.pam)) mark(5);
+  stepper(); stepCard.innerHTML = R[S.step](); bindNav(); viewForStep(); summary(); wire(); drawGel();
+}
+function wire(){
+  stepCard.querySelectorAll('[data-stop]').forEach(b => b.onclick = () => { if (b.dataset.stop==='remove'){ S.gfpStop='remove'; FB['1b']=msg('ok','Right: for a C-terminal fusion the EGFP stop codon must go, otherwise translation would stop after GFP and the native stop codon would not be used. (Keeping it would also make GFP a separate, terminated unit.)'); } else { S.gfpStop=null; FB['1b']=msg('bad','If EGFP kept its own TAA, translation would stop right after EGFP. That is fine for a normal C-terminal tag only if the original stop is not read twice, but the cleanest design inserts EGFP without its stop codon so the native stop codon terminates the fusion. Choose the other option.'); } save(); render(); });
+  const bg=$('bGuide'); if (bg) bg.onclick = checkGuide; const gi=$('inGuide'); if (gi) gi.onkeydown = e => { if(e.key==='Enter') checkGuide(); };
+  stepCard.querySelectorAll('[data-mut]').forEach(b => b.onclick = () => applyMutation(b.dataset.mut));
+  const bt=$('bTmpl'); if (bt) bt.onclick = checkTmpl;
+  const ba=$('bAmp'); if (ba) ba.onclick = checkAmp;
+  const bgeo=$('bGeno'); if (bgeo) bgeo.onclick = () => { stepCard.querySelectorAll('[data-in]').forEach(i => S[i.dataset.in]=i.value); S.done[8]=false; S.genoRes = genoCheck(); save(); render(); };
+  stepCard.querySelectorAll('details').forEach(d => d.ontoggle = () => { S.solShown[S.step] = d.open; });
+  const bc=$('bCopy'); if (bc) bc.onclick = () => { const t=$('outTxt'); t.select(); try{ navigator.clipboard.writeText(t.value);}catch(e){ document.execCommand('copy'); } bc.textContent='Copied ✔'; };
+  const bd=$('bDown'); if (bd) bd.onclick = () => { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([$('outTxt').value],{type:'text/plain'})); a.download='vhp-1-GFP-CRISPR-design.txt'; a.click(); };
+}
+$('stepper').onclick = e => { const b = e.target.closest('[data-go]'); if (b && !b.disabled) go(+b.dataset.go); };
+$('btnRestart').onclick = () => { if (confirm('Start again from the beginning?')) { S = fresh(); FB = {}; save(); render(); } };
+$('btnTheme').onclick = () => { const cur = document.documentElement.getAttribute('data-theme'); const dark = cur ? cur==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.setAttribute('data-theme', dark?'light':'dark'); render(); };
+window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(()=>viewForStep(), 150); });
+$('bCopyF').onmousedown = $('bCopyR').onmousedown = e => e.preventDefault();
+$('bCopyF').onclick = () => doCopy('f'); $('bCopyR').onclick = () => doCopy('r');
+document.addEventListener('selectionchange', updateSel);
+window.__crispr = {checkTmpl, selInfo, doCopy, describePrimer, solGeno, destSeq, pairProducts, get S(){return S}, set S(v){S=v}, WT, GFP, INS, pamInfo, pamAt, candidatePams, aaEffect, pamBroken, buildTemplate, editedGenome, pcr, rc, genoCheck, render, resultText, checkAmp, pickIns, pickPam, pickCut, checkGuide, applyMutation, FB:()=>FB};
+render();
+</script>
+</body>
+</html>
