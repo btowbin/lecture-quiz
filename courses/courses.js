@@ -11,7 +11,7 @@
 QUIZ.courses([
   { id: 'sysbio',   file: 'sysbio.js',   active: true  },
   { id: 'devbio',   file: 'devbio.js',   active: true  },
-  { id: 'dummy101', file: 'dummy101.js', active: true  },
+  { id: 'dummy101', file: 'dummy101.js', active: false  },
   { id: 'example', file: 'example.js', active: false },
   { id: 'transgenic', file: 'transgenic.js', active: true },
 ]);
