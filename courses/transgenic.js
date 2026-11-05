@@ -58,7 +58,8 @@ QUIZ.course('transgenic', ({ r, table }) => ({
 
     { id: 'T2-03', lec: 2, diff: 2, topic: 'Reading a gel',
       q: r`After HindIII + XbaI digestion, a clone shows only <b>one band of about 3.4 kb</b> (lane 3 in the gel shown). What happened?`,
-      fig: { img: 'transgenic/gel.png' },
+      fig: { img: 'transgenic/gel_plasmid.png' },
+      expfig: { img: 'transgenic/map_lane3_empty.png' },
       opts: [r`The vector re-ligated without an insert: XbaI linearised it (3359 bp) and HindIII does not cut it`,
              r`The insert is present, but inverted`,
              r`The insert is present twice, in tandem`,
@@ -67,7 +68,8 @@ QUIZ.course('transgenic', ({ r, table }) => ({
 
     { id: 'T2-04', lec: 2, diff: 2, topic: 'Reading a gel',
       q: r`After HindIII + XbaI digestion, a clone shows <b>two bands of about 2.9 kb and 1.5 kb</b> (lane 4 in the gel shown). What explains the pattern?`,
-      fig: { img: 'transgenic/gel.png' },
+      fig: { img: 'transgenic/gel_insert_vector.png' },
+      expfig: { img: 'transgenic/map_lane4_inverted.png' },
       opts: [r`A single insert ligated in the wrong (inverted) orientation`,
              r`A single insert in the correct orientation`,
              r`A vector without insert`,
