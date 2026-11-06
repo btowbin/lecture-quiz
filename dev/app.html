@@ -103,6 +103,7 @@ button,input,select{font:inherit;color:inherit}
 .figs>.fig{width:100%}
 .fig.img img{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--line);background:#fff}
 .fig.img .cap{font-size:.82rem;color:var(--muted);margin-top:4px}
+.bgx{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--bg)} .bgx>summary{cursor:pointer;font-weight:600;color:var(--accent)} .bgx[open]>summary{margin-bottom:8px} .histtxt{margin-bottom:8px;font-size:.95em}
 .pm .fig.img img{max-height:calc(100vh - 190px);object-fit:contain}
 /* true/false sets and short answers */
 .tflist{display:grid;gap:8px;margin-top:10px}
@@ -257,6 +258,13 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 .qli{display:flex;gap:10px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--card);text-align:left}
 .qli:hover{border-color:var(--accent)}
 .qli.cur{border-color:var(--accent);background:var(--accent-soft)}
+.lcgrid{display:grid;grid-template-columns:minmax(240px,300px) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:860px){.lcgrid{grid-template-columns:1fr}}
+.qrbox.lcqr{display:block;max-width:240px;padding:10px} .qrbox.lcqr svg{width:100%}
+.lcrow{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);margin:6px 0;flex-wrap:wrap}
+.lcrow.cur{border-color:var(--accent);background:var(--accent-soft)}
+.lcrow .n{font:700 .85rem ui-monospace,Menlo,monospace;color:var(--muted);width:1.8em;flex:none;text-align:right}
+.lcrow .tx{flex:1 1 220px;min-width:0} .lcrow .tx b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qli .id{font:700 .8rem ui-monospace,Menlo,monospace;color:var(--muted);flex:none;width:4.2em}
 .qli .tp{flex:1}
 .qli .st{flex:none;font-size:.82rem;color:var(--muted)}
@@ -397,11 +405,11 @@ function lintCourse(id, spec, lectures, questions){
       if(!q.model) e('short answer needs a model answer (model)');
       if(!Array.isArray(q.criteria) || !q.criteria.length) e('short answer needs criteria: [ … ]');
     }
-    const txt = (q.q || '') + (q.opts || []).join('') + (q.exp || '') + (q.statements || []).map(st => (st && st.t || '') + (st && st.exp || '')).join('') + (q.model || '') + (q.criteria || []).join('');
+    const txt = (q.q || '') + (q.hist && q.hist.text || '') + (q.opts || []).join('') + (q.exp || '') + (q.statements || []).map(st => (st && st.t || '') + (st && st.exp || '')).join('') + (q.model || '') + (q.criteria || []).join('');
     if(txt.split('$').length % 2 === 0) e('unbalanced $ (LaTeX)');
     const bare = txt.match(/<(?!\/?(b|i|u|br|p|table|tr|th|td|em|strong|sub|sup|span|code)\b)[A-Za-z]/);
     if(bare) e('"' + bare[0] + '" would be read as an HTML tag — write \\lt instead of < (and \\gt instead of >) in formulas');
-    for(const F of (q.fig ? [].concat(q.fig) : []).concat(q.expfig ? [].concat(q.expfig) : [])){
+    for(const F of (q.fig ? [].concat(q.fig) : []).concat(q.expfig ? [].concat(q.expfig) : []).concat(q.hist && q.hist.fig ? [].concat(q.hist.fig) : [])){
       if(!F || typeof F !== 'object'){ e('fig is not an object'); continue; }
       if(F.img){ if(typeof F.img !== 'string' || !/\.(jpe?g|png|gif|svg|webp)$/i.test(F.img)) e('img must be a .jpg/.png/.gif/.svg/.webp file name'); continue; }
       if(F.net){ const ns = Object.keys(F.nodes || {}); (F.edges || []).forEach((ed, i) => {
@@ -606,7 +614,8 @@ function netFig(s){
 }
 const figOne = f => f.img ? '<div class="fig img"><a href="'+esc(COURSE_DIR+f.img)+'" target="_blank" rel="noopener"><img src="'+esc(COURSE_DIR+f.img)+'" alt="'+esc(f.alt||T('Figure'))+'" loading="lazy"></a>'+(f.cap?'<div class="cap">'+esc(f.cap)+'</div>':'')+'</div>'
   : '<div class="fig'+(f.net?' net':'')+'">'+(f.net?netFig(f):plot(f))+'</div>';
-const figHTML = q => !q.fig ? '' : (Array.isArray(q.fig) ? '<div class="figs">'+q.fig.map(figOne).join('')+'</div>' : figOne(q.fig));
+const bgHTML = q => !q.hist ? '' : '<details class="bgx"><summary>'+esc(q.hist.label||T('Show background'))+'</summary>'+(q.hist.text?'<div class="histtxt">'+q.hist.text+'</div>':'')+(q.hist.fig?'<div class="figs">'+[].concat(q.hist.fig).map(figOne).join('')+'</div>':'')+'</details>';
+const figHTML = q => (!q.fig ? '' : (Array.isArray(q.fig) ? '<div class="figs">'+q.fig.map(figOne).join('')+'</div>' : figOne(q.fig))) + bgHTML(q);
 
 /* ====================================================================
    ROUTING
@@ -631,16 +640,17 @@ window.addEventListener('popstate', e=>{
   route = h.r.name==='practice' ? {name:'practice', stage:'setup'} : h.r;
   render(); window.scrollTo(0,0);
 });
-function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='poll') pollLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
+function cleanup(){ if(route.name==='host') hostLeave(); if(route.name==='poll') pollLeave(); if(route.name==='lecture') lectureLeave(); if(route.name==='live') studentLeave(); document.onkeydown=null; }
 function bootRoute(){ bootRoute0(); const st=hstate(), cur=remember(); history.replaceState({k:cur.k,d:st?st.d||0:0},'',location.pathname+location.search+location.hash); }
 function bootRoute0(){
   const qs = new URLSearchParams(location.search), act = activeCourses(), want = qs.get('course');
-  if(!qs.get('join') && !/^#(host|stats|check|lecturer|poll)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
+  if(!qs.get('join') && !/^#(host|stats|check|lecturer|poll|lecture)$/.test(location.hash) && !bootRoute.counted){ bootRoute.counted=true; count('visits'); }
   if(want && !useCourse(want)) { route={name:'courses', missing:want}; render(); return; }
   if(!COURSE && act.length===1) useCourse(act[0].id);
   if(location.hash==='#check') { route={name:'check'}; render(); return; }
   if(location.hash==='#lecturer') { route={name:'lecturer'}; render(); return; }
   if(location.hash==='#poll') { route={name:'poll'}; render(); return; }
+  if(location.hash==='#lecture') { route={name:'lecture'}; render(); return; }
   if(qs.get('join')) { route={name:'live', code:qs.get('join').toUpperCase().replace(/[^A-Z0-9]/g,'')}; render(); return; }
   if(!COURSE && (location.hash==='#host' || location.hash==='#stats')){ const last=LS.get('lq.lastcourse',null); if(last && useCourse(last)){} else if(act.length) useCourse(act[0].id); }
   if(!COURSE) { route={name:'courses'}; render(); return; }
@@ -653,7 +663,7 @@ function bootRoute0(){
 }
 function render(){
   document.body.classList.remove('hide-cursor');
-  if((route.name==='host'||route.name==='stats'||route.name==='check'||route.name==='lecturer'||route.name==='poll') && !lecturerOK()){ viewLogin(); return; }
+  if((route.name==='host'||route.name==='stats'||route.name==='check'||route.name==='lecturer'||route.name==='poll'||route.name==='lecture') && !lecturerOK()){ viewLogin(); return; }
   if(route.name==='home') viewHome();
   else if(route.name==='practice') viewPractice();
   else if(route.name==='live') viewLive();
@@ -663,6 +673,7 @@ function render(){
   else if(route.name==='check') viewCheck();
   else if(route.name==='lecturer') viewLecturer();
   else if(route.name==='poll') viewPoll();
+  else if(route.name==='lecture') viewLecture();
 }
 function header(extra){
   const back = (route.name!=='home' && route.name!=='courses') ? '<button class="btn ghost back" data-act="back" title="'+T('Back')+'">'+T('← Back')+'</button>' : (COURSE && route.name==='home' && activeCourses().length>1 ? '<button class="btn ghost back" data-act="allcourses" title="'+T('Back to the list of courses')+'">'+T('← All courses')+'</button>' : '');
@@ -703,6 +714,7 @@ function viewLecturer(){
   const rows=act.map(c=>'<div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0"><b style="flex:1 1 180px">'+esc(c.title)+'</b><button class="btn primary" data-act="lhost" data-arg="'+esc(c.id)+'">Presenter view</button><button class="btn" data-act="lstats" data-arg="'+esc(c.id)+'">Statistics</button></div>').join('');
   app.innerHTML='<div class="wrap" style="max-width:720px">'+header()+'<h1 style="margin-bottom:6px">Lecturer</h1><div class="card stack" style="margin-top:14px"><h2>Courses</h2>'+(rows||'<p class="muted">No active course.</p>')+'</div>'+
     '<div class="card stack" style="margin-top:14px"><h2>Instant poll</h2><p class="muted small" style="margin:0">Ask a question on the spot — choice, number or word cloud — with a permanent QR code per class.</p><div class="row"><button class="btn primary" data-act="lpoll">Instant poll</button></div></div>'+
+    '<div class="card stack" style="margin-top:14px"><h2>Prepare lecture</h2><p class="muted small" style="margin:0">Build a lecture in advance: polls and quiz questions in one ordered list, presented one after another in a single room with one permanent QR code.</p><div class="row"><button class="btn primary" data-act="llecture">Prepare lecture</button></div></div>'+
     '<div class="card stack" style="margin-top:14px"><h2>Tools</h2><div class="row"><button class="btn" data-act="lcheck">Check a course file</button></div></div>'+
     '<p class="muted small" style="margin-top:20px"><button class="link" data-act="lectback">← Back to the quiz</button>'+(LECTURER_HASH?' · <button class="link" data-act="lectout">Log out</button>':'')+'</p></div>';
 }
@@ -713,6 +725,7 @@ Object.assign(ACTS, {
   lhost(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'host'}, courseURL(id,'#host')); },
   lstats(id){ if(!useCourse(id)) return; LS.set('lq.lastcourse',id); go({name:'stats'}, courseURL(id,'#stats')); },
   lpoll(){ go({name:'poll'}, location.pathname+'#poll'); },
+  llecture(){ go({name:'lecture'}, location.pathname+'#lecture'); },
   lcheck(){ go({name:'check'}, location.pathname+'#check'); },
   async lectlogin(){
     const i=document.getElementById('lpw'), er=document.getElementById('lerr'); if(!i) return;
@@ -1285,6 +1298,7 @@ function setupHTML(){
 }
 
 // __POLL__
+// __LECTURE__
 
 /* ====================================================================
    STATISTICS  (#stats) — reads the anonymous Abacus counters

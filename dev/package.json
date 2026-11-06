@@ -4,7 +4,7 @@
   "description": "App build + tests for lecture-quiz (not needed for adding courses).",
   "scripts": {
     "build": "node build.js",
-    "test": "node test.js && node test-multi.js"
+    "test": "node test.js && node test-multi.js && node test-lecture.js"
   },
   "devDependencies": {
     "aedes": "0.51.3",

@@ -68,6 +68,9 @@ Only in `dev/app.html`; then `cd dev; npm install; npx playwright install chromi
 
 - **Instant polls** (`#poll`, behind the Lecturer menu): source in `dev/poll.js`, inlined into `index.html` by `node dev/build.js` at the `// __POLL__` marker in `dev/app.html`. Classes in `lq.polls`, per-class data in `lq.poll.<id>` (presenter browser). Room state has `kind:'poll'`; student answers `{sid,qid,v}` on the usual topics. Tested in `test-multi.js` (INSTANT POLLS).
 
+- **Prepared lectures** (`#lecture`, lecturer menu → "Prepare lecture"): source in `dev/lecture.js`, inlined by `node dev/build.js` at the `// __LECTURE__` marker in `dev/app.html` (after `// __POLL__`). One room per lecture, items are polls (`kind:'poll'`) or course questions (`kind:'quiz'`, `qid`). The presenter sends poll-style states (`kind:'poll'`) for polls and the lobby, and quiz-style states (`course`, `qid`, `counts`, as in the live quiz) for quiz items, so the student page needed no change; answers use `{sid,qid,v}` (polls) or `{sid,qid,choice}` (quiz). Storage in the presenter browser: `lq.lectures` (list), `lq.lecture.<id>` (items, run state with answers, draft). JSON format `lecture-quiz-lecture` (export/import). Tested in `test-lecture.js` (npm `test` runs all three suites). Student waiting text is now neutral ("Waiting for the next question…").
+- **`hist` background field** (collapsible "Show background" block under a question: `hist:{label,text,fig}`; used in `courses/transgenic.js`) had only been added to a local copy of `index.html`; it is now in `dev/app.html` (`bgHTML`, lint, CSS `.bgx`).
+
 ## Pitfalls
 - Change not visible → push did not run, Pages still deploying, or cache: `git status` "up to date with origin", Actions tab green, private window.
 - Course missing → `active:false`, id mismatch between `courses.js` and `QUIZ.course(...)`, or a JS error (see `#check`).

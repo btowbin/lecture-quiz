@@ -10,8 +10,8 @@ const pollStoreSave = s => LS.set(PKEY,s);
 const prepSave = () => pollSave();
 let P=null;
 const PSTR={
-  en:{wait:'Waiting for the next poll…', in:'You’re in!', poll:'Poll', send:'Send', upd:'Update answer', sent:'✓ Answer received — you can still change it until the results are shown.', num:'Enter a number', word:'Your word or short phrase', res:'Results', mine:'Your answer', n:'answers', none:'No answer submitted', mean:'mean', median:'median', empty:'No answers yet.', bad:'Please enter a number.', ok:'✓ Correct', no:'✗ Not quite — correct answer: ', corr:'correct'},
-  de:{wait:'Warten auf die nächste Umfrage…', in:'Sie sind dabei!', poll:'Umfrage', send:'Senden', upd:'Antwort ändern', sent:'✓ Antwort erhalten – bis zur Auflösung können Sie sie noch ändern.', num:'Zahl eingeben', word:'Ihr Wort oder Ausdruck', res:'Ergebnis', mine:'Ihre Antwort', n:'Antworten', none:'Keine Antwort abgegeben', mean:'Mittelwert', median:'Median', empty:'Noch keine Antworten.', bad:'Bitte eine Zahl eingeben.', ok:'✓ Richtig', no:'✗ Nicht ganz – richtige Antwort: ', corr:'richtig'}
+  en:{wait:'Waiting for the next question…', in:'You’re in!', poll:'Poll', send:'Send', upd:'Update answer', sent:'✓ Answer received — you can still change it until the results are shown.', num:'Enter a number', word:'Your word or short phrase', res:'Results', mine:'Your answer', n:'answers', none:'No answer submitted', mean:'mean', median:'median', empty:'No answers yet.', bad:'Please enter a number.', ok:'✓ Correct', no:'✗ Not quite — correct answer: ', corr:'correct'},
+  de:{wait:'Warten auf die nächste Frage…', in:'Sie sind dabei!', poll:'Umfrage', send:'Senden', upd:'Antwort ändern', sent:'✓ Antwort erhalten – bis zur Auflösung können Sie sie noch ändern.', num:'Zahl eingeben', word:'Ihr Wort oder Ausdruck', res:'Ergebnis', mine:'Ihre Antwort', n:'Antworten', none:'Keine Antwort abgegeben', mean:'Mittelwert', median:'Median', empty:'Noch keine Antworten.', bad:'Bitte eine Zahl eingeben.', ok:'✓ Richtig', no:'✗ Nicht ganz – richtige Antwort: ', corr:'richtig'}
 };
 const pstr = (L,k) => (PSTR[L]||PSTR.en)[k] || PSTR.en[k];
 const fmtN = x => String(+(+x).toPrecision(3));
