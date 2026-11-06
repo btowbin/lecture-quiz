@@ -29,6 +29,11 @@ function wordApply(map,s,m){   // one student's message about a word poll: m.v a
   if(ws.length) map[s]=ws; else delete map[s];
   return true;
 }
+function wordState(it){ const words=asWords(S.st&&S.st.mine), pend=((S.pwq===it.id&&S.pw)||[]).filter(w=>!hasWord(words,w)); return {words, pend, all:words.concat(pend)}; }
+function wordCan(it){ const {all}=wordState(it), val=S.pdraft||''; return val.trim()!==''&&all.length<PMAXW&&!hasWord(all,cleanWord(val)); }
+function wordChipsHTML(it,L){ const {words,all}=wordState(it); return all.map((w,i)=>'<span class="wchip'+(i>=words.length?' pend':'')+'">'+esc(w)+'<button class="wx" data-act="plrm" data-arg="'+esc(w)+'" aria-label="'+esc(pstr(L,'rm'))+'" title="'+esc(pstr(L,'rm'))+'">×</button></span>').join(''); }
+/* while a student is typing, incoming messages must not rebuild the page (that would close the keyboard): only these parts are refreshed */
+function pollSoftUpdate(st){ const it=st&&st.item; if(!it||it.type!=='word') return; const c=document.getElementById('wchips'); if(c) c.innerHTML=wordChipsHTML(it,st.lang||'en'); const b=document.querySelector('[data-act=plsend]'); if(b) b.disabled=!wordCan(it); }
 function wordTotals(it){ let n=0,p=0; Object.values(it.answers||{}).forEach(v=>{ const k=asWords(v).length; if(k){ n+=k; p++; } }); return {n,p}; }
 
 /* ---- results (shared by presenter and students) ---- */
@@ -384,9 +389,8 @@ function pollStudentBody(st){
     return '<div class="card">'+head+qh+'<h3 style="margin:14px 0 4px">'+esc(pstr(L,'res'))+' <span class="muted small">('+(res.n||0)+' '+esc(pstr(L,it.type==='word'?'nw':'n'))+(it.type==='word'?' · '+(res.p||0)+' '+esc(pstr(L,'ppl')):'')+')</span></h3>'+pollResBody(it,res,mine,L,cor)+(cor!=null?'<div class="feedback '+(mine==null?'':mine===cor?'ok':'bad')+'"><h3 style="margin:0">'+(mine==null?esc(pstr(L,'none')):mine===cor?esc(pstr(L,'ok')):esc(pstr(L,'no'))+LETTERS[cor])+'</h3></div>':'')+you+'</div>';
   }
   if(it.type==='word'){   // several words per student: input + chips of the words already sent (× removes one)
-    const words=asWords(mine), pend=((S.pwq===it.id&&S.pw)||[]).filter(w=>!hasWord(words,w)), all=words.concat(pend), val=S.pdraft||'';
-    const full=all.length>=PMAXW, can=val.trim()!==''&&!full&&!hasWord(all,cleanWord(val));
-    const chips=all.length?'<div class="wchips">'+all.map((w,i)=>'<span class="wchip'+(i>=words.length?' pend':'')+'">'+esc(w)+'<button class="wx" data-act="plrm" data-arg="'+esc(w)+'" aria-label="'+esc(pstr(L,'rm'))+'" title="'+esc(pstr(L,'rm'))+'">×</button></span>').join('')+'</div>':'';
+    const val=S.pdraft||'', full=wordState(it).all.length>=PMAXW, can=wordCan(it);
+    const chips='<div class="wchips" id="wchips">'+wordChipsHTML(it,L)+'</div>';
     return '<div class="card">'+head+qh+'<input id="pin" class="pin big" maxlength="40" autocomplete="off" autocapitalize="none" placeholder="'+esc(pstr(L,'word'))+'" value="'+esc(val)+'" style="margin-top:16px;width:100%"'+(full?' disabled':'')+'>'+
       '<div class="row" style="margin-top:16px"><button class="btn primary big grow" data-act="plsend"'+(can?'':' disabled')+'>'+esc(pstr(L,'add'))+'</button></div>'+chips+
       '<div class="feedback" style="margin-top:12px"><span class="muted">'+esc(full?pstr(L,'max').replace('{n}',PMAXW):pstr(L,'hint'))+'</span></div></div>';
@@ -419,12 +423,12 @@ Object.assign(ACTS,{
     else {
       const el=document.getElementById('pin'); v=cleanWord((el?el.value:S.pdraft)||''); if(!v) return;
       const all=asWords(S.st.mine).concat((S.pwq===it.id&&S.pw)||[]);
-      if(hasWord(all,v)||all.length>=PMAXW){ S.pdraft=''; studentPaint(); return; }
-      if(spub('a',{sid:S.sid,qid:S.st.qid,v},1)){ if(S.pwq!==it.id){ S.pwq=it.id; S.pw=[]; } S.pw.push(v); S.pdraft=''; studentPaint(); }
+      if(hasWord(all,v)||all.length>=PMAXW){ S.pdraft=''; if(el) el.value=''; studentPaint(); return; }
+      if(spub('a',{sid:S.sid,qid:S.st.qid,v},1)){ if(S.pwq!==it.id){ S.pwq=it.id; S.pw=[]; } S.pw.push(v); S.pdraft=''; if(el) el.value=''; studentPaint(); }
       return;
     }
     if(spub('a',{sid:S.sid,qid:S.st.qid,v},1)){ S.pendingSince=Date.now(); if(it.type!=='choice') S.pdraft=String(v); studentPaint(); }
   },
 });
-document.addEventListener('input', e=>{ if(S&&e.target&&e.target.id==='pin'){ S.pdraft=e.target.value; S.perr=false; const b=document.querySelector('[data-act=plsend]'); if(b&&S.st&&S.st.item){ const mine=S.st.mine, it=S.st.item; if(it.type==='word'){ const all=asWords(mine).concat((S.pwq===it.id&&S.pw)||[]); b.disabled=!(e.target.value.trim()!==''&&all.length<PMAXW&&!hasWord(all,cleanWord(e.target.value))); } else b.disabled=!(e.target.value.trim()!==''&&e.target.value!==String(mine)); } } });
+document.addEventListener('input', e=>{ if(S&&e.target&&e.target.id==='pin'){ S.pdraft=e.target.value; S.perr=false; const b=document.querySelector('[data-act=plsend]'); if(b&&S.st&&S.st.item){ const mine=S.st.mine, it=S.st.item; if(it.type==='word'){ b.disabled=!wordCan(it); } else b.disabled=!(e.target.value.trim()!==''&&e.target.value!==String(mine)); } } });
 document.addEventListener('keydown', e=>{ if(e.key==='Enter'&&S&&e.target&&e.target.id==='pin'){ e.preventDefault(); ACTS.plsend(); } });

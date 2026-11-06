@@ -73,6 +73,14 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   for (const s of [s1, s2]) await s.waitForSelector('#pin', { timeout: 10000 }); check(/transgenic organism/.test(await s1.innerText('.qtext')), 'item 1 (word cloud) reaches the phones');
   await s1.fill('#pin', 'Gene'); await s1.click('[data-act=plsend]'); await s2.fill('#pin', ' gene '); await s2.click('[data-act=plsend]');
   await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 }); check(true, 'host counts 2 word answers');
+  {   // an incoming message must not rebuild the page while a student is typing (on a phone that closes the keyboard)
+    const mq = require('mqtt'), c = mq.connect('ws://127.0.0.1:9031/'); let raw;
+    await new Promise(res => { c.on('connect', () => c.subscribe('lecture-quiz/v1/' + code + '/state')); c.on('message', (t, b) => { raw = b; res(); }); });
+    await s1.focus('#pin'); await s1.keyboard.type('ab'); const h = await s1.evaluateHandle(() => document.getElementById('pin'));
+    c.publish('lecture-quiz/v1/' + code + '/state', raw); await s1.waitForTimeout(1000);
+    check(await s1.evaluate(el => el === document.getElementById('pin') && document.activeElement === el && el.value === 'ab', h), 'an incoming message does not rebuild the page while a student is typing (keyboard stays open)');
+    c.end(); await s1.fill('#pin', '');
+  }
   await s1.fill('#pin', 'Cell'); await s1.press('#pin', 'Enter'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '3', null, { timeout: 10000 }); check(true, 'a student can add a second word in a lecture (3 words)');
   await s1.click('.wchip:has-text("Cell") .wx'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 }); check(true, 'a student can remove a word again (2 words)');
   await s1.fill('#pin', 'Cell'); await s1.press('#pin', 'Enter'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '3', null, { timeout: 10000 });

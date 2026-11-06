@@ -288,7 +288,7 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 .pm .wcloud{font-size:clamp(20px,3.2vw,56px)}
 .wc{white-space:nowrap}
 .wc.mine{text-decoration:underline;text-decoration-thickness:3px}
-.wchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.wchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px} .wchips:empty{display:none}
 .wchip{display:inline-flex;align-items:center;gap:2px;padding:5px 4px 5px 12px;border-radius:999px;background:var(--accent-soft);border:1px solid var(--line);font-weight:600}
 .wchip.pend{opacity:.55}
 .wchip .wx{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:1.2em;line-height:1;padding:2px 8px;border-radius:999px}
@@ -973,6 +973,11 @@ function studentPaint(full){
   const stxt = T(S.status==='on'?'Connected':(S.status==='connecting'?'Connecting…':(S.status==='wait'?'Waiting for lecturer':(S.status==='error'?'Error':'Reconnecting…'))));
   let body='';
   const st=S.st;
+  if(document.activeElement&&document.activeElement.id==='pin'&&st&&S.pq===st.qid&&S.pph===st.phase){   // someone is typing an answer: do not rebuild the page under their fingers (the keyboard would close) — refresh only the status and the word chips
+    const se=document.querySelector('.wrap.live .status'); if(se) se.innerHTML='<i class="dot '+dotCls+'"></i>'+stxt+' · '+esc(S.code);
+    if(typeof pollSoftUpdate==='function') pollSoftUpdate(st);
+    return;
+  }
   if(S.badCourse) body+='<div class="banner">The questions of this live quiz (course “'+esc(S.badCourse)+'”) are not available on this site. Ask your lecturer.</div>';
   if(st && st.kind!=='poll' && st.ver!==VER) body+='<div class="banner">Your page is out of date. Please reload it (pull down, or hard-refresh) to see the current question.</div>';
   if(S.err && S.status!=='on') body+='<div class="banner warn">'+esc(S.err)+'</div>';
@@ -1002,7 +1007,7 @@ function studentPaint(full){
     }
     body+='<div class="card"><div class="qmeta">'+T('Question {0} of {1}',st.n,st.N)+' · '+esc(q.topic)+diffTag(q)+'</div><div class="qtext">'+q.q+'</div>'+figHTML(q)+'<div class="opts">'+opts+'</div>'+foot+'</div>';
   }
-  const hadPin=document.activeElement&&document.activeElement.id==='pin';
+  const hadPin=document.activeElement&&document.activeElement.id==='pin'; S.pq=st&&st.qid; S.pph=st&&st.phase;
   app.innerHTML='<div class="wrap live">'+header('<span class="status"><i class="dot '+dotCls+'"></i>'+stxt+' · '+esc(S.code)+'</span>')+body+'<p class="muted small" style="margin-top:20px"><button class="link" data-act="home">'+T('Leave live quiz')+'</button> · version '+esc(BUILD)+'</p></div>';
   if(!st||full||true) typeset(app);
   if(hadPin){ const pi=document.getElementById('pin'); if(pi){ pi.focus(); try{ pi.setSelectionRange(pi.value.length,pi.value.length); }catch(e){} } }
