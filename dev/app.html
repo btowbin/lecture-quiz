@@ -288,6 +288,11 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 .pm .wcloud{font-size:clamp(20px,3.2vw,56px)}
 .wc{white-space:nowrap}
 .wc.mine{text-decoration:underline;text-decoration-thickness:3px}
+.wchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.wchip{display:inline-flex;align-items:center;gap:2px;padding:5px 4px 5px 12px;border-radius:999px;background:var(--accent-soft);border:1px solid var(--line);font-weight:600}
+.wchip.pend{opacity:.55}
+.wchip .wx{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:1.2em;line-height:1;padding:2px 8px;border-radius:999px}
+.wchip .wx:hover{color:var(--ink)}
 .pollm{grid-template-columns:1fr}
 .cbtn{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-weight:800;opacity:.55}
 .cbtn:hover{opacity:1;border-color:var(--ok)} .cbtn.on{background:var(--ok);border-color:var(--ok);color:#fff;opacity:1}

@@ -26,7 +26,8 @@ const LC_GREEK={alpha:'α',beta:'β',gamma:'γ',delta:'δ',epsilon:'ε',theta:'�
 const lcPlain = s => String(s||'').replace(/<[^>]*>/g,'').replace(/\\(?:mathrm|mathbf|text|textbf|mathit)\{([^}]*)\}/g,'$1').replace(/\\([A-Za-z]+)/g,(m,w)=>LC_GREEK[w]||w).replace(/[$\\{}^_]/g,'').replace(/\s+/g,' ').trim();
 const lcLabel = (it,n) => { const q=it.kind==='quiz'?byId[it.qid]:null; const t=q?(q.topic||q.id):(it.q||PTYPES[it.type]); const s=lcPlain(t); return (n&&s.length>n)?s.slice(0,n)+'…':s; };
 function lcQuizCounts(it){ const q=byId[it.qid], c=q.opts.map(()=>0); Object.values(lcAns(it)).forEach(v=>{ if(c[v]!=null) c[v]++; }); return c; }
-function lcAnswered(it){ const a=Lc.run.answers[it.id]; return a?Object.keys(a).length:0; }
+const lcIsWord = it => it.kind==='poll' && it.type==='word';
+function lcAnswered(it){ const a=Lc.run.answers[it.id]; if(!a) return 0; return lcIsWord(it)?wordTotals({answers:a}).n:Object.keys(a).length; }
 function lcCleanItem(x){
   if(!x||typeof x!=='object') return null;
   if(x.kind==='quiz'){ const q=String(x.qid||'').slice(0,40); return q?{id:lid(),kind:'quiz',qid:q}:null; }
@@ -80,7 +81,7 @@ function lcState(){
 }
 function lpub(t,o,retain){ Lc.cls.forEach(cl=>{ try{ if(cl.connected) cl.publish(topic(Lc.code,t),enc(o),{qos:1,retain:!!retain}); }catch(e){} }); }
 function lcBroadcast(){ lpub('state',lcState(),true); }
-function lcPersonal(s){ const it=lcCur(); if(!it) return; const a=Lc.run.answers[it.id]||{}; lpub('s/'+s,{qid:lcQid(it),mine:(s in a)?a[s]:null}); }
+function lcPersonal(s){ const it=lcCur(); if(!it) return; const a=Lc.run.answers[it.id]||{}; lpub('s/'+s,{qid:lcQid(it),mine:lcIsWord(it)?asWords(a[s]):((s in a)?a[s]:null)}); }
 function lcConnect(){
   if(!Lc||Lc.dead) return;
   if(!window.mqtt){ Lc.status='error:lib'; lcStatus(); setTimeout(lcConnect,3000); return; }
@@ -112,10 +113,10 @@ function lcMsg(k,m){
     const e=Lc.pres.get(s); Lc.pres.set(s,{t:Date.now(),cid:e?e.cid:m.cid});
     const it=lcCur(); if(!it||Lc.run.phase!=='q'||m.qid!==lcQid(it)){ lcPersonal(s); return; }
     let v=m.v!==undefined?m.v:m.choice;
+    if(lcIsWord(it)){ if(!wordApply(lcAns(it),s,m)) return; lcPersonal(s); lcCount(); lcSaveSoon(); return; }   // word cloud: every student can add several words
     if(it.kind==='quiz'){ if(!Number.isInteger(v)||v<0||v>=byId[it.qid].opts.length) return; if(s in lcAns(it)){ lcPersonal(s); return; } }      // quiz: first answer counts
     else if(it.type==='choice'){ if(!Number.isInteger(v)||v<0||v>=it.opts.length) return; }
     else if(it.type==='num'){ if(typeof v!=='number'||!isFinite(v)||Math.abs(v)>1e12) return; }
-    else { if(typeof v!=='string') return; v=v.replace(/\s+/g,' ').trim().slice(0,40); if(!v) return; }
     lcAns(it)[s]=v; lcPersonal(s); lcCount(); lcSaveSoon();
   }
 }
@@ -124,6 +125,7 @@ function lcCount(){
   if(!Lc) return; const it=lcCur();
   document.querySelectorAll('[data-hc]').forEach(el=>el.textContent=lcPresent());
   document.querySelectorAll('[data-ha]').forEach(el=>el.textContent=it?lcAnswered(it):0);
+  document.querySelectorAll('[data-hp]').forEach(el=>el.textContent=(it&&lcIsWord(it))?wordTotals(lcPit(it)).p:0);
 }
 function lcStatus(){
   const el=document.getElementById('hstat'); if(!el||!Lc) return;
@@ -232,7 +234,7 @@ function lcEditPaint(){
     '<div class="row" style="justify-content:space-between"><div class="segs">'+seg('choice','Choice')+seg('num','Number')+seg('word','Word / phrase')+'</div></div>'+
     '<textarea id="lcq" data-lc="q" rows="2" class="pin" placeholder="Question (optional – you can also just ask it aloud)">'+esc(d.q||'')+'</textarea>'+
     (d.type==='choice'?'<div class="row small muted" style="gap:8px">Number of answers '+chips+'</div><div class="popts">'+ins+'</div><div class="muted small">Leave the answer texts empty to let students simply vote A, B, C… Optionally mark the correct answer with ✓: the reveal then has two steps (answers first, then the solution).</div>'
-      :'<div class="muted small">'+(d.type==='num'?'Students type a number; the reveal shows the distribution.':'Students type a word or short phrase; the reveal shows a word cloud.')+'</div>')+
+      :'<div class="muted small">'+(d.type==='num'?'Students type a number; the reveal shows the distribution.':'Students type a word or short phrase — each student can add several; the reveal shows a word cloud.')+'</div>')+
     '<div class="row"><button class="btn primary" data-act="lcpadd">'+(Lc.editing?'Save changes':'Add poll')+'</button>'+(Lc.editing?'<button class="btn" data-act="lcpcancel">Cancel</button>':'<button class="btn" data-act="lcbulk">Add several polls…</button><button class="btn" data-act="lcqpick"'+(course?'':' disabled')+'>Add quiz questions…</button>')+'</div>'+
     '<div class="small muted" id="lcmsg">'+esc(Lc.ui.msg||'')+'</div></div>';
   let html='<div class="wrap" style="max-width:1180px">'+header()+
@@ -286,9 +288,9 @@ function lcRunPaint(){
     const rev=ph==='r'||ph==='c', res=pollResults(lcPit(it)), tot=res.n, idx=list.indexOf(it)+1; let body;
     if(rev) body=pollResBody(lcPit(it),res,null,Lc.lang,ph==='c'?it.correct:null);
     else if(it.type==='choice') body='<div class="opts">'+it.opts.map((o,i)=>'<div class="opt"><span class="k">'+LETTERS[i]+'</span><span class="t">'+(o?esc(o):'')+'</span></div>').join('')+'</div>';
-    else body='<div class="muted" style="font-size:clamp(18px,2vw,34px);margin-top:14px">'+(it.type==='num'?'Students are entering a number…':'Students are typing a word or short phrase…')+'</div>';
-    const tally=rev?'<div class="tally"><span>'+tot+' answer'+(tot===1?'':'s')+'</span>'+(ph==='c'?(function(){ const k=res.counts[it.correct]||0; return '<span class="ok">✓ '+k+' correct'+(tot?' ('+Math.round(100*k/tot)+' %)':'')+'</span>'; })():'')+'</div>'
-      :'<div class="anscount"><span>Answers received:</span><span class="anum" data-ha>'+tot+'</span><span class="muted">of <span data-hc>'+lcPresent()+'</span> online</span></div>';
+    else body='<div class="muted" style="font-size:clamp(18px,2vw,34px);margin-top:14px">'+(it.type==='num'?'Students are entering a number…':'Students are adding words or short phrases…')+'</div>';
+    const isW=it.type==='word', tally=rev?'<div class="tally"><span>'+tot+(isW?' word':' answer')+(tot===1?'':'s')+(isW?' from '+res.p+' '+(res.p===1?'person':'people'):'')+'</span>'+(ph==='c'?(function(){ const k=res.counts[it.correct]||0; return '<span class="ok">✓ '+k+' correct'+(tot?' ('+Math.round(100*k/tot)+' %)':'')+'</span>'; })():'')+'</div>'
+      :(isW?'<div class="anscount"><span>Words received:</span><span class="anum" data-ha>'+tot+'</span><span class="muted">from <span data-hp>'+res.p+'</span> of <span data-hc>'+lcPresent()+'</span> online</span></div>':'<div class="anscount"><span>Answers received:</span><span class="anum" data-ha>'+tot+'</span><span class="muted">of <span data-hc>'+lcPresent()+'</span> online</span></div>');
     html='<div class="proj"><div class="ph"><button class="btn ghost" data-act="lcedit" style="white-space:nowrap" title="Back to the editor (the room stays online)">← Edit</button><span class="lec" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28vw">'+esc(Lc.name)+'</span><span class="muted">·</span><span style="white-space:nowrap">Item '+idx+' / '+list.length+'</span><span class="pill">'+esc(PTYPES[it.type])+'</span><span class="sp"></span><span id="hstat" class="status"></span></div>'+
       '<div class="pm pollm"><div><div class="qtext">'+(it.q?esc(it.q):'<span class="muted">'+(it.type==='choice'?'Vote!':'Answer on your phone')+'</span>')+'</div>'+body+tally+'</div></div>'+lcFooter(it,ph,rev)+'</div>';
   }
@@ -320,7 +322,7 @@ const lcSlug = s => String(s||'lecture').toLowerCase().replace(/[^a-z0-9]+/g,'-'
 function lcCSV(){
   const rows=[['lecture','item','kind','type','question_id','question','correct','answer']];
   lcList().forEach((it,i)=>{ const a=Lc.run.answers[it.id]||{};
-    Object.values(a).forEach(v=>{
+    (lcIsWord(it)?Object.values(a).flatMap(asWords):Object.values(a)).forEach(v=>{
       if(it.kind==='quiz'){ const q=byId[it.qid], cor=correctOf(q); rows.push([Lc.name,i+1,'quiz','choice',q.id,lcPlain(q.q),LETTERS[optOrder(q,'').indexOf(cor)]+': '+lcPlain(q.opts[cor]),LETTERS[optOrder(q,'').indexOf(v)]+': '+lcPlain(q.opts[v])+(v===cor?' (correct)':' (wrong)')]); }
       else rows.push([Lc.name,i+1,'poll',it.type,'',it.q||'',(it.type==='choice'&&it.correct!=null)?LETTERS[it.correct]:'',it.type==='choice'?LETTERS[v]+(it.opts[v]?': '+it.opts[v]:''):v]);
     }); });

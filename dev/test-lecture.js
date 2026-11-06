@@ -73,8 +73,11 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   for (const s of [s1, s2]) await s.waitForSelector('#pin', { timeout: 10000 }); check(/transgenic organism/.test(await s1.innerText('.qtext')), 'item 1 (word cloud) reaches the phones');
   await s1.fill('#pin', 'Gene'); await s1.click('[data-act=plsend]'); await s2.fill('#pin', ' gene '); await s2.click('[data-act=plsend]');
   await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 }); check(true, 'host counts 2 word answers');
+  await s1.fill('#pin', 'Cell'); await s1.press('#pin', 'Enter'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '3', null, { timeout: 10000 }); check(true, 'a student can add a second word in a lecture (3 words)');
+  await s1.click('.wchip:has-text("Cell") .wx'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 }); check(true, 'a student can remove a word again (2 words)');
+  await s1.fill('#pin', 'Cell'); await s1.press('#pin', 'Enter'); await host.waitForFunction(() => document.querySelector('[data-ha]').textContent === '3', null, { timeout: 10000 });
   await host.keyboard.press('Space'); await host.waitForSelector('.wcloud .wc'); await s1.waitForSelector('.wcloud .wc', { timeout: 10000 });
-  check((await host.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title))).join() === 'Gene:2×', 'word cloud merged on host and phone');
+  check((await host.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title))).sort().join() === 'Cell:1×,Gene:2×', 'word cloud merged on host and phone (several words per student)');
   // item 2: choice with correct answer (Elephant) -> two-step reveal
   await host.keyboard.press('Space'); for (const s of [s1, s2]) await s.waitForSelector('button.opt', { timeout: 10000 });
   check(/Elephant/.test(await s1.innerText('.opts')), 'item 2 (choice) with answer texts on the phone');

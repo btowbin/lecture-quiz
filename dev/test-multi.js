@@ -132,8 +132,18 @@ const COURSES_BOTH = "QUIZ.courses([{id:'sysbio',file:'sysbio.js',active:true},{
   for (const sp of [ps1, ps2]) await sp.waitForSelector('#pin', { timeout: 10000 });
   await ps1.fill('#pin', 'Gene'); await ps1.click('[data-act=plsend]'); await ps2.fill('#pin', ' gene '); await ps2.click('[data-act=plsend]');
   await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '2', null, { timeout: 10000 });
+  // several words per student: add more, a repeated word is ignored, a typo can be removed
+  await ps1.fill('#pin', 'Cell'); await ps1.press('#pin', 'Enter');
+  await ps1.fill('#pin', ' GENE '); check(await ps1.$eval('[data-act=plsend]', b => b.disabled), 'a word you already added cannot be added twice');
+  await ps1.fill('#pin', 'Typo'); await ps1.press('#pin', 'Enter');
+  await ps1.waitForFunction(() => document.querySelectorAll('.wchip').length === 3, null, { timeout: 10000 }); check(true, 'student sees chips of the 3 words added');
+  check(await ps1.$eval('#pin', e => e.value === '' && document.activeElement === e), 'input is cleared and keeps focus for the next word');
+  await ps1.click('.wchip:has-text("Typo") .wx'); await ps1.waitForFunction(() => document.querySelectorAll('.wchip').length === 2, null, { timeout: 10000 });
+  await pph.waitForFunction(() => document.querySelector('[data-ha]').textContent === '3', null, { timeout: 10000 }); check(/from\s*2/.test((await pph.innerText('.anscount')).replace(/\s+/g, ' ')), 'host counts 3 words from 2 people (typo removed): ' + (await pph.innerText('.anscount')).replace(/\s+/g, ' '));
   await pph.click('[data-act=plreveal]'); await pph.waitForSelector('.wcloud .wc', { timeout: 5000 }); await ps1.waitForSelector('.wcloud .wc', { timeout: 10000 });
-  const words = await pph.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title)); check(words.join() === 'Gene:2×', 'word cloud merges Gene / gene: ' + words);
+  const words = await pph.$$eval('.wcloud .wc', e => e.map(x => x.textContent + ':' + x.title)); check(words.sort().join() === 'Cell:1×,Gene:2×', 'word cloud merges Gene / gene and shows all words per student: ' + words);
+  check(/3 words from 2 people/.test((await pph.innerText('.tally')).replace(/\s+/g, ' ')), 'tally: ' + (await pph.innerText('.tally')).replace(/\s+/g, ' '));
+  check((await ps1.$$('.wcloud .wc.mine')).length === 2 && (await ps2.$$('.wcloud .wc.mine')).length === 1 && /Your words:\s*Gene, Cell/.test((await ps1.innerText('.feedback')).replace(/\s+/g, ' ')), 'each student sees their own words marked in the cloud');
   await pph.screenshot({ path: path.join(shots, 'm-poll-cloud.png') }); await ps1.screenshot({ path: path.join(shots, 'm-poll-student.png') });
   // prepared questions
   pph.on('dialog', d => d.accept());
