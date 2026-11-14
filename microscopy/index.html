@@ -366,7 +366,7 @@ function lampSpec(d){if(_ls.has(d.id))return _ls.get(d.id);let a;if(d.type==='wh
 const TS=mk(l=>0.8*(0.85+0.15*sig((l-480)/40)));
 function info(d){
  if(d.kind==='filter')return d.type==='lp'?'Passes '+bn(d.bands[0])+' and every redder colour. Blocks the bluer ones.':'Passes '+listText(d.bands)+'. Blocks the other colours.';
- if(d.kind==='dichroic')return 'Reflects '+listText(d.refl)+': those colours turn the corner. Passes '+listText(d.pass)+': those go straight on. Both happen at once, so light splits in two. Used backwards, it can merge two beams of different colours into one.';
+ if(d.kind==='dichroic')return 'Reflects '+listText(d.refl)+': those colours turn the corner. Passes '+listText(d.pass)+': those go straight on. A beam splits in two only if it holds colours from both groups. Every dichroic also leaks a few percent the wrong way: the beams drawn on the grid leave that out, but the spectra and the camera image include it. Used backwards, it can merge two beams of different colours into one.';
  return d.desc||'';
 }
 const lab=d=>d.kind==='filter'?'the '+d.name+' filter':d.kind==='dichroic'?'the dichroic that reflects '+d.refl.map(bn).join(' + '):'the '+d.name.toLowerCase();
@@ -376,6 +376,11 @@ const Lab=d=>{const t=lab(d);return t[0].toUpperCase()+t.slice(1)};
 const COLS=11,ROWS=8;
 const DIRS=[[1,0],[0,1],[-1,0],[0,-1]],DIRNAME=['right','down','left','up'];
 const REFL={'/':[3,2,1,0],'\\':[1,0,3,2]};
+/* a beam is a leak (not drawn) when its best colour passes at under 10% of what came in */
+const peakFrac=(a,b)=>{let m=0;for(let i=0;i<N;i++)if(a[i]>m)m=a[i];m*=0.15;let p=0;for(let i=0;i<N;i++)if(a[i]>m){const f=b[i]/a[i];if(f>p)p=f}return p};
+const LEAK=0.1;
+/* a narrow beam (LED, fluorescence) must also keep 10% of its power; a broad lamp keeps only the part a filter selects */
+const isLeak=(tag,a,b)=>{if(peakFrac(a,b)<LEAK)return true;const sa=sum(a);let m=0;for(let i=0;i<N;i++)if(a[i]>m)m=a[i];return sa/m<150&&sum(b)<LEAK*sa};
 const orient=rot=>rot%2===0?'/':'\\';
 let _u=0;const uid=()=>'u'+(++_u);
 const put=(pid,c,r,rot)=>({uid:uid(),pid,c,r,rot:rot||0});
@@ -393,45 +398,47 @@ function trace(inst,opt){
  R.complete=R.missing.length===0;R.allOff=allLamps.length>0&&lamps.length===0;
  lamps.forEach(l=>{R.lampP+=geo?1:sum(lampSpec(PID[l.pid]))});
  if(!lamps.length)return R;
- const q=[];const push=(c,r,d,spec,tag,last)=>q.push({c,r,d,spec,tag,last});
+ const q=[];const push=(c,r,d,spec,tag,last,lk)=>q.push({c,r,d,spec,tag,last,lk:!!lk});
  lamps.forEach(l=>push(l.c,l.r,l.rot,geo?ONE:lampSpec(PID[l.pid]),'ex',{name:'the lamp',how:'lamp'}));
  const thr=geo?-1:R.lampP*1e-10;const visits=new Map();let guard=0;
  const ev=(type,b,p,extra)=>R.events.push(Object.assign({type,tag:b.tag,lost:p,last:b.last,dir:b.d},extra));
  while(q.length&&guard++<12000){
   const b=q.shift();const p=sum(b.spec);if(p<=thr)continue;
   const vk=b.c+','+b.r+','+b.d+','+b.tag;const vv=visits.get(vk)||0;if(vv>=4)continue;visits.set(vk,vv+1);
-  const ek=b.c+','+b.r+','+b.d;let e=R.edges.get(ek);if(!e){e={c:b.c,r:b.r,d:b.d,spec:Z(),tags:new Set()};R.edges.set(ek,e)}
+  const ek=b.c+','+b.r+','+b.d;let e=R.edges.get(ek);if(!e){e={c:b.c,r:b.r,d:b.d,spec:Z(),tags:new Set(),major:false};R.edges.set(ek,e)}
+  if(!b.lk)e.major=true;
   for(let i=0;i<N;i++)e.spec[i]+=b.spec[i];e.tags.add(b.tag);
   const nc=b.c+DIRS[b.d][0],nr=b.r+DIRS[b.d][1];
   if(nc<0||nr<0||nc>=COLS||nr>=ROWS){ev('edge',b,p);continue}
   const part=grid.get(nc+','+nr);
-  if(!part){push(nc,nr,b.d,b.spec,b.tag,b.last);continue}
+  if(!part){push(nc,nr,b.d,b.spec,b.tag,b.last,b.lk);continue}
   const def=PID[part.pid],k=def.kind;
   if(k==='filter'||k==='wheel'){
    if(b.d%2!==part.rot%2){ev('edgeon',b,p,{part:def});continue}
    const fd=k==='wheel'?(PID[(part.slots||[])[part.pos||0]]||null):def;
    const s2=(geo||!fd)?b.spec:mul(b.spec,filterT(fd)),p2=sum(s2);
    if(!geo&&fd&&p2<p*0.01)ev('blocks',b,p-p2,{part:fd,cent:cent(b.spec),pass:p2/p,wheel:k==='wheel'});
-   push(nc,nr,b.d,s2,b.tag,{name:k==='wheel'?'the filter wheel':lab(def),how:'filter'});
+   push(nc,nr,b.d,s2,b.tag,{name:k==='wheel'?'the filter wheel':lab(def),how:'filter'},b.lk||(!geo&&!!fd&&isLeak(b.tag,b.spec,s2)));
   }else if(k==='mirror'){
-   push(nc,nr,REFL[orient(part.rot)][b.d],geo?b.spec:scl(b.spec,.97),b.tag,{name:'the mirror',how:'mirror'});
+   push(nc,nr,REFL[orient(part.rot)][b.d],geo?b.spec:scl(b.spec,.97),b.tag,{name:'the mirror',how:'mirror'},b.lk);
   }else if(k==='dichroic'||k==='turret'||k==='splitter'){
    const dd=k==='turret'?(PID[(part.slots||[])[part.pos||0]]||null):def;
-   if(!dd){push(nc,nr,b.d,b.spec,b.tag,{name:'the dichroic turret',how:'filter'});continue}
+   if(!dd){push(nc,nr,b.d,b.spec,b.tag,{name:'the dichroic turret',how:'filter'},b.lk);continue}
    const o=REFL[orient(part.rot)][b.d],x=k==='splitter'?HALF:dichroic(dd);
    const nm=k==='splitter'?'the beam splitter':lab(dd);
-   push(nc,nr,b.d,geo?b.spec:mul(b.spec,x.T),b.tag,{name:nm,how:'transmitted'});push(nc,nr,o,geo?b.spec:mul(b.spec,x.R),b.tag,{name:nm,how:'reflected'});
+   const sT=geo?b.spec:mul(b.spec,x.T),sR=geo?b.spec:mul(b.spec,x.R);
+   push(nc,nr,b.d,sT,b.tag,{name:nm,how:'transmitted'},b.lk||(!geo&&isLeak(b.tag,b.spec,sT)));push(nc,nr,o,sR,b.tag,{name:nm,how:'reflected'},b.lk||(!geo&&isLeak(b.tag,b.spec,sR)));
   }else if(k==='sample'){
    const epi=b.d===(part.rot+2)%4,dia=b.d===part.rot;
    if(!epi&&!dia){ev('side',b,p,{part:def,rot:part.rot});continue}
    if(b.tag!=='ex'){ev('absorb',b,p,{part:def});continue}
    const last={name:'the sample',how:'sample'},out=part.rot;
-   if(geo){R.Es=ONE;push(nc,nr,out,ONE,epi?'fl0':'tr',last);continue}
+   if(geo){R.Es=ONE;push(nc,nr,out,ONE,epi?'fl0':'tr',last,b.lk);continue}
    const Es=epi?mul(b.spec,OBJ):mul(b.spec,TS);R.Es=add(R.Es,Es);
    def.dyes.forEach((key,i)=>{const f=FLUORS[key],sp=fluorSpecs(f);const a=dot(Es,scl(sp.ex,ABS_REF*f.ec/50000));R.abs[i]+=a;
-    const fl=mul(scl(sp.em,a*f.qy*OMEGA),OBJ);R.flGen[i]+=sum(fl);push(nc,nr,out,fl,'fl'+i,last)});
-   if(epi)push(nc,nr,out,scl(mul(Es,OBJ),SCAT),'bg',last);
-   else{const tr=mul(Es,OBJ);R.trGen+=sum(tr);push(nc,nr,out,tr,'tr',last)}
+    const fl=mul(scl(sp.em,a*f.qy*OMEGA),OBJ);R.flGen[i]+=sum(fl);push(nc,nr,out,fl,'fl'+i,last,b.lk)});
+   if(epi)push(nc,nr,out,scl(mul(Es,OBJ),SCAT),'bg',last,b.lk);
+   else{const tr=mul(Es,OBJ);R.trGen+=sum(tr);push(nc,nr,out,tr,'tr',last,b.lk)}
   }else if(k==='camera'){
    if(b.d!==(part.rot+2)%4){ev('side',b,p,{part:def,rot:part.rot});continue}
    const c=R.cams[camIdx.get(part)];c.cam[b.tag]=add(c.cam[b.tag]||Z(),b.spec);
@@ -673,6 +680,7 @@ function beams(){
   if(!live){
    s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--bench-ink-2)" stroke-width="2" stroke-dasharray="3 6" opacity=".7"/>';
    s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="var(--bench-ink-2)" opacity=".85"/>';continue}
+  if(!e.major)continue;
   const p=C.sum(e.spec);if(!(p>ref*1e-8))continue;
   const col=C.specColor(e.spec),l=lv(p,ref),dash=col.invisible?' stroke-dasharray="7 5"':'';
   s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col.css+'" stroke-width="18" opacity="'+(0.5*l).toFixed(2)+'" filter="url(#glow)"/>';
