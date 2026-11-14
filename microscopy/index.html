@@ -317,6 +317,7 @@ const BORDER=['uv','blue','green','orange','red'];
 const bn=k=>BANDS[k].name,cap=s=>s==='UV'?s:s[0].toUpperCase()+s.slice(1);
 const listText=ks=>{const n=ks.map(bn);return n.length<2?n.join(''):n.slice(0,-1).join(', ')+' and '+n[n.length-1]};
 const colourOf=l=>{for(const k of BORDER){const z=BANDS[k].zone;if(l>=z[0]&&l<z[1])return k}return 'red'};
+const bandPow=a=>{const o=BORDER.map(()=>0);for(let i=0;i<N;i++)if(a[i]>0)o[BORDER.indexOf(colourOf(WL[i]))]+=a[i];return o};
 const FLT=(id,bands,limit)=>({id,kind:'filter',type:'band',bands,name:bands.map(b=>cap(bn(b))).join(' + '),limit});
 const LPF=(id,from,limit)=>{const bands=BORDER.slice(BORDER.indexOf(from));return {id,kind:'filter',type:'lp',cut:BANDS[from].zone[0]-1,bands,name:cap(bn(from))+' \u2192 red',limit}};
 const DMF=(id,refl,limit)=>{const pass=BORDER.filter(k=>!refl.includes(k));return {id,kind:'dichroic',refl,pass,name:'Reflects '+refl.map(bn).join(' + '),limit}};
@@ -568,7 +569,7 @@ const LAYOUTS={
 ['gfp','mch','dapi'].forEach(k=>{const a=analyze(LAYOUTS[k]());REF[a.dyes[0].key]=a.sigRate?a.sigRate[0]:a.camInfo[0].sig[0]});
 TRREF=analyze(LAYOUTS.bf()).camInfo[0].tr;
 
-return {WL,L0,L1,N,COLS,ROWS,DIRS,DIRNAME,REFL,orient,sum,dot,mx,mul,cent,clamp,sig,specColor,monoColor,toCss,filterT,dichroic,info,PARTS,PID,FLUORS,LAMP,QE,OBJ,TS,lampSpec,trace,analyze,verdict,diagnose,scanWheels,checkTask,LAYOUTS,REF,uid,put,fluorSpecs,BANDS,BORDER,bn,cap,listText,colourOf,dotsOf,lab,get TRREF(){return TRREF}};
+return {WL,L0,L1,N,COLS,ROWS,DIRS,DIRNAME,REFL,orient,sum,dot,mx,mul,cent,clamp,sig,specColor,monoColor,toCss,filterT,dichroic,info,PARTS,PID,FLUORS,LAMP,QE,OBJ,TS,lampSpec,trace,analyze,verdict,diagnose,scanWheels,checkTask,LAYOUTS,REF,uid,put,fluorSpecs,BANDS,BORDER,bn,cap,listText,colourOf,bandPow,dotsOf,lab,get TRREF(){return TRREF}};
 })();
 //==CORE-END
 
@@ -670,22 +671,32 @@ function syncBin(){
 /* ---------- board drawing ---------- */
 const OFF=[[0,5],[5,0],[0,-5],[-5,0]];
 const lv=(p,ref)=>clamp(1+Math.log10(p/ref)/6,0,1);
+const ODIR=[[0,1],[1,0],[0,-1],[-1,0]];
 function beams(){
- let s='';const E=(state.lampOn&&sim.complete)?sim.edges:geo.edges;const live=state.lampOn&&sim.complete;
+ const live=!!(state.lampOn&&sim.edges&&sim.edges.size);
+ const E=live?sim.edges:geo.edges;
  if(!live&&!(geo.edges.size))return '';
- const ref=sim.lampP;
+ let s='';const ref=sim.lampP;
  for(const e of E.values()){
-  const cx=e.c*CELL+CELL/2+OFF[e.d][0],cy=e.r*CELL+CELL/2+OFF[e.d][1],[dx,dy]=C.DIRS[e.d];
-  const x2=cx+dx*CELL,y2=cy+dy*CELL,mx=(cx+x2)/2,my=(cy+y2)/2;
   if(!live){
+   const cx=e.c*CELL+CELL/2+OFF[e.d][0],cy=e.r*CELL+CELL/2+OFF[e.d][1],[dx,dy]=C.DIRS[e.d];
+   const x2=cx+dx*CELL,y2=cy+dy*CELL,mx=(cx+x2)/2,my=(cy+y2)/2;
    s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--bench-ink-2)" stroke-width="2" stroke-dasharray="3 6" opacity=".7"/>';
    s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="var(--bench-ink-2)" opacity=".85"/>';continue}
   if(!e.major)continue;
-  const p=C.sum(e.spec);if(!(p>ref*1e-8))continue;
-  const col=C.specColor(e.spec),l=lv(p,ref),dash=col.invisible?' stroke-dasharray="7 5"':'';
-  s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col.css+'" stroke-width="18" opacity="'+(0.5*l).toFixed(2)+'" filter="url(#glow)"/>';
-  s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col.css+'" stroke-width="6" opacity="'+(0.25+0.75*l).toFixed(2)+'"'+dash+'/>';
-  s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="#fff" opacity="'+(0.35+0.4*l).toFixed(2)+'"/>';
+  /* one lane per colour band in the beam, side by side, so you can see which colours go where */
+  const pw=C.bandPow(e.spec),top=Math.max(...pw);if(!(top>ref*1e-8))continue;
+  const lanes=[];pw.forEach((v,i)=>{if(v>=0.08*top&&v>ref*1e-8)lanes.push(i)});
+  const n=lanes.length,SP=5,LW=4.2,mag=5+(n-1)*SP/2,horiz=e.d%2===0;
+  const bx=e.c*CELL+CELL/2+ODIR[e.d][0]*mag,by=e.r*CELL+CELL/2+ODIR[e.d][1]*mag,[dx,dy]=C.DIRS[e.d];
+  lanes.forEach((bi,j)=>{
+   const k=C.BORDER[bi],dl=(j-(n-1)/2)*SP,cx=bx+(horiz?0:dl),cy=by+(horiz?dl:0),x2=cx+dx*CELL,y2=cy+dy*CELL;
+   const l=lv(pw[bi],ref),col=C.BANDS[k].col,dash=k==='uv'?' stroke-dasharray="7 5"':'';
+   s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="'+(LW+8)+'" opacity="'+(0.4*l).toFixed(2)+'" filter="url(#glow)"/>';
+   s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="'+LW+'" opacity="'+(0.3+0.7*l).toFixed(2)+'"'+dash+'/>';
+  });
+  const mx=bx+dx*CELL/2,my=by+dy*CELL/2;
+  s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="#fff" opacity=".6"/>';
  }
  return s;
 }
@@ -888,7 +899,7 @@ function posText(pos){const wh=scan.wh;return pos.map((q,k)=>{const f=C.PID[(wh[
 function renderResults(){
  const box=$('#result');$('#btnLamp').textContent=state.lampOn?'Switch lamps off':'Switch lamps on';$('#btnLamp').classList.toggle('primary',!state.lampOn);
  if(!state.lampOn){box.innerHTML='<p class="note" style="margin-top:12px">The lamps are off and the dotted lines show only where light could travel. Choose a prediction, then switch the lamps on.</p>';return}
- if(!sim.complete){box.innerHTML='<div class="verdict"><h3>The bench is not complete</h3><p>Add '+sim.missing.join(', ')+'.</p></div>';return}
+ if(!sim.complete){box.innerHTML='<div class="verdict"><h3>The bench is not complete</h3><p>Add '+sim.missing.join(', ')+'. The coloured lines already show where each colour of light goes: one lane per colour, side by side.</p></div>';return}
  if(sim.allOff){box.innerHTML='<div class="verdict"><h3>All lamps are off</h3><p>Select a lamp on the grid and switch it on.</p></div>';return}
  const [tone,title,txt]=VT[ver.key];let h='<div class="verdict '+tone+'"><h3>'+title+'</h3><p>'+(ver.key==='partial'?esc(sim.dyes.filter((f,i)=>!sim.dyeClean[i]).map(f=>f.label).join(' and '))+' is not yet clean on any camera.':txt)+'</p></div>';
  const mv=mapVer(ver.key);
