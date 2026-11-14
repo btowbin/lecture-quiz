@@ -320,7 +320,7 @@ select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);backgroun
 /* ====================================================================
    SETTINGS  (edit here)
    ==================================================================== */
-const BUILD        = '2026-11-06 08:13';                // version stamp (shown at the bottom of the pages)
+const BUILD        = '2026-11-14 16:27';                // version stamp (shown at the bottom of the pages)
 const TITLE        = 'Lecture quizzes';          // site title (course picker); each course has its own title
 const COURSE_DIR   = 'courses/';                 // where courses.js and the course files live
 // LIVE MODE TRANSPORT: messages travel through free public MQTT brokers (MQTT over secure WebSocket, no account needed).
@@ -756,12 +756,13 @@ function viewHome(){
 }
 
 function viewCourses(){
+  const MICRO_LINK = '<a class="chip" style="flex:1 1 300px;text-decoration:none;color:inherit" href="https://btowbin.github.io/lecture-quiz/microscopy/"><b>Fluorescence Microscopy</b><span>Interactive light path simulator</span></a>';
   const act = activeCourses();
   const cards = act.map(c => '<button class="chip" style="flex:1 1 300px" data-act="pickcourse" data-arg="'+esc(c.id)+'"><b>'+esc(c.title)+'</b><span>'+c.questions.length+' questions · '+Object.keys(c.lectures).length+' '+esc(c.unit.toLowerCase())+'s</span></button>').join('');
   app.innerHTML = '<div class="wrap">'+header()+
     '<div class="hero"><h1>'+esc(TITLE)+'</h1><p>Choose your course.</p></div>'+
     (route.missing ? '<div class="banner">The course “'+esc(route.missing)+'” is not available (not activated, or its file failed to load).</div>' : '')+
-    (act.length ? '<div class="chips">'+cards+'</div>' : '<div class="card">No course is activated yet. Add a course file to <code>courses/</code> and switch it on in <code>courses/courses.js</code>.</div>')+
+    (act.length ? '<div class="chips">'+cards+MICRO_LINK+'</div>' : '<div class="card">No course is activated yet. Add a course file to <code>courses/</code> and switch it on in <code>courses/courses.js</code>.</div>')+
     '<div class="card choice" style="margin-top:20px"><h2>Join a live quiz</h2><p>Scan the QR code on the screen, or type the room code shown by your lecturer.</p><div class="row"><input id="code" class="codein" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn primary big" data-act="joinGo">Join</button></div></div>'+
     '<p class="muted small" style="margin-top:28px"><button class="link" data-act="lecturer">Lecturer</button> · Version '+esc(BUILD)+'</p></div>';
   const inp=document.getElementById('code'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') ACTS.joinGo(); });

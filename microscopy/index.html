@@ -617,8 +617,8 @@ const hasSample=()=>state.board.some(p=>def(p).kind==='sample');
 function limitOf(d){return state.mode==='simple'&&d.limitSimple!=null?d.limitSimple:d.limit}
 function available(pid){const d=C.PID[pid];
  if(d.adv&&state.mode==='simple')return false;
- if(d.kind==='sample'){if(hasSample())return false;if(state.task&&TASKS[state.task].pid!==pid)return false;return true}
- return used(pid)<limitOf(d)}
+ if(d.kind==='sample'){if(state.task&&TASKS[state.task].pid!==pid)return false;return true}
+ return true}
 const cellAt=(c,r)=>state.board.find(p=>p.c===c&&p.r===r);
 const selInst=()=>state.board.find(p=>p.uid===state.sel)||null;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),4200)}
@@ -647,7 +647,7 @@ function chipHTML(p){
 }
 function renderBin(){
  const groups=[];C.PARTS.forEach(p=>{let g=groups.find(x=>x.name===p.group);if(!g){g={name:p.group,items:[]};groups.push(g)}g.items.push(p)});
- let h='<h2 class="bin-title">Parts</h2><p class="bin-help">Drag a part onto the grid, or tap it and then tap a cell. Each part is limited, like a real bench.</p>';
+ let h='<h2 class="bin-title">Parts</h2><p class="bin-help">Drag a part onto the grid, or tap it and then tap a cell. Use as many of each part as you need; only one sample fits on the stage. Click another sample to swap it.</p>';
  for(const g of groups){h+='<details class="grp" open><summary>'+esc(g.name)+'</summary><div class="chips">';
   for(const p of g.items)h+=chipHTML(p);
   h+='</div></details>'}
@@ -656,8 +656,7 @@ function renderBin(){
 }
 function syncBin(){
  $$('#bin .chip').forEach(ch=>{const p=C.PID[ch.dataset.pid],hide=p.adv&&state.mode==='simple',ok=available(p.id);
-  const left=p.kind==='sample'?(ok?1:0):limitOf(p)-used(p.id);
-  ch.hidden=hide;ch.disabled=!ok;ch.querySelector('small').textContent=p.kind==='sample'?'':'×'+left;
+    ch.hidden=hide;ch.disabled=!ok;ch.querySelector('small').textContent='';
   ch.classList.toggle('armed',state.armed===p.id)});
  $$('#bin details').forEach(d=>{d.hidden=!d.querySelector('.chip:not([hidden])')});
 }
@@ -756,7 +755,7 @@ const holds=k=>k==='wheel'?'filter':k==='turret'?'dichroic':null;
 function loadWheel(i,pid){
  const p=selInst();if(!p||!holds(def(p).kind))return;
  const f=C.PID[pid],need=holds(def(p).kind);if(!f||f.kind!==need){toast(need==='filter'?'Only filters fit in a wheel.':'Only dichroics fit in a turret.');return}
- if(!available(pid)){toast('No more of that filter are left.');return}
+ if(!available(pid)){toast('That filter is not available.');return}
  p.slots=p.slots||[null,null,null,null];p.slots[i]=pid;p.pos=i;state.armed=null;syncArm();update(p.uid);
 }
 $('#selinfo').addEventListener('click',e=>{
@@ -769,9 +768,16 @@ $('#selinfo').addEventListener('click',e=>{
 });
 
 /* ---------- editing ---------- */
+function swapSample(pid){
+ const p=state.board.find(x=>def(x).kind==='sample');if(!p||!available(pid))return false;
+ if(p.pid!==pid){p.pid=pid;state.sel=p.uid;state.armed=null;syncArm();update(p.uid);toast('Sample changed to '+C.PID[pid].name+'.')}
+ else{state.sel=p.uid;state.armed=null;syncArm();update(p.uid)}
+ return true;
+}
 function add(pid,c,r){
+ if(C.PID[pid].kind==='sample'&&hasSample())return swapSample(pid);
  if(cellAt(c,r)){toast('That cell is taken. Drop the part on an empty cell.');return false}
- if(!available(pid)){toast(C.PID[pid].kind==='sample'?'Only one sample fits on the stage.':'No more of that part are left. Remove one from the grid first.');return false}
+ if(!available(pid)){toast('That part is not available.');return false}
  const p=C.put(pid,c,r,0);if(C.PID[pid].kind==='lamp')p.on=true;if(holds(C.PID[pid].kind)){p.slots=[null,null,null,null];p.pos=0}state.board.push(p);state.sel=p.uid;state.armed=null;update();return true;
 }
 function moveTo(uid,c,r){
@@ -813,6 +819,7 @@ function onCancel(){endDrag();drag=null}
 
 $('#bin').addEventListener('pointerdown',e=>{const ch=e.target.closest('.chip');if(!ch||ch.disabled||e.pointerType==='touch')return;const d=C.PID[ch.dataset.pid];startDrag(e,{pid:d.id},d.name,partColor(d))});
 $('#bin').addEventListener('click',e=>{const ch=e.target.closest('.chip');if(!ch||ch.disabled||justDragged)return;
+ if(C.PID[ch.dataset.pid].kind==='sample'&&hasSample()){swapSample(ch.dataset.pid);return}
  state.armed=state.armed===ch.dataset.pid?null:ch.dataset.pid;syncArm()});
 function syncArm(){const a=state.armed,bar=$('#armbar');
  if(a){bar.hidden=false;bar.innerHTML='<span>Placing '+esc(C.PID[a].name)+': tap an empty cell.</span><button type="button" id="armCancel">Cancel</button>'}else bar.hidden=true;
@@ -1125,7 +1132,7 @@ $('#dlgLoad').addEventListener('click',()=>{
  try{const j=JSON.parse($('#dlgText').value);if(!j||!Array.isArray(j.parts))throw 0;if(j.mode==='adv'||j.mode==='simple'){state.mode=j.mode;renderMode()}const nb=[],cnt={};let smp=0;
   for(const r of j.parts){const d=C.PID[r.pid];if(!d||(d.adv&&state.mode==='simple'))continue;const c=Math.round(+r.c),rr=Math.round(+r.r),rot=((Math.round(+r.rot)||0)%4+4)%4;
    if(!(c>=0&&rr>=0&&c<C.COLS&&rr<C.ROWS)||nb.some(p=>p.c===c&&p.r===rr))continue;
-   cnt[d.id]=(cnt[d.id]||0)+1;if(cnt[d.id]>d.limit)continue;if(d.kind==='sample'&&smp++>0)continue;const np=C.put(d.id,c,rr,rot);if(d.kind==='lamp')np.on=r.on!==false;if(holds(d.kind)){np.slots=[0,1,2,3].map(i=>{const s=(r.slots||[])[i];return C.PID[s]&&C.PID[s].kind===holds(d.kind)?s:null});np.pos=clamp(Math.round(+r.pos)||0,0,3)}nb.push(np)}
+   if(d.kind==='sample'&&smp++>0)continue;const np=C.put(d.id,c,rr,rot);if(d.kind==='lamp')np.on=r.on!==false;if(holds(d.kind)){np.slots=[0,1,2,3].map(i=>{const s=(r.slots||[])[i];return C.PID[s]&&C.PID[s].kind===holds(d.kind)?s:null});np.pos=clamp(Math.round(+r.pos)||0,0,3)}nb.push(np)}
   reset();state.task=null;state.board=nb;predMode='';renderStart();update();$('#dlg').close();toast('Design loaded.');
  }catch(_){toast('That text is not a valid design.')}
 });
