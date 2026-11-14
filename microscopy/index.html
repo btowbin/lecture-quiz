@@ -617,7 +617,6 @@ const hasSample=()=>state.board.some(p=>def(p).kind==='sample');
 function limitOf(d){return state.mode==='simple'&&d.limitSimple!=null?d.limitSimple:d.limit}
 function available(pid){const d=C.PID[pid];
  if(d.adv&&state.mode==='simple')return false;
- if(d.kind==='sample'){if(state.task&&TASKS[state.task].pid!==pid)return false;return true}
  return true}
 const cellAt=(c,r)=>state.board.find(p=>p.c===c&&p.r===r);
 const selInst=()=>state.board.find(p=>p.uid===state.sel)||null;
