@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Light path bench: design a fluorescence microscope</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+ --bg:#e7ebee;--surface:#fafbfc;--surface-2:#eef2f5;--ink:#13202a;--ink-2:#4b5b68;--line:#c9d3da;
+ --accent:#9a5a00;--accent-ink:#fff;--accent-soft:#f5e4c4;
+ --good:#0d8560;--warn:#a86400;--bad:#be3434;
+ --bench:#0a1015;--bench-ink:#c9d6df;--bench-ink-2:#8798a4;--bench-line:#2c3b47;--bench-slot:#111b23;
+ --plot-bg:#fafbfc;--plot-grid:#dfe5ea;--plot-ink:#3b4a56;
+ color-scheme:light;
+ font-family:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --bg:#0d1317;--surface:#151e25;--surface-2:#1b2730;--ink:#e6edf1;--ink-2:#9fb0bc;--line:#2a3a45;
+ --accent:#f0b429;--accent-ink:#1a1204;--accent-soft:#3a2d0c;
+ --good:#38c79a;--warn:#f0b429;--bad:#ff7a7a;
+ --bench:#070b0f;--bench-ink:#c9d6df;--bench-ink-2:#8798a4;--bench-line:#2c3b47;--bench-slot:#0f1920;
+ --plot-bg:#10181e;--plot-grid:#22313b;--plot-ink:#b5c3cd;color-scheme:dark}}
+:root[data-theme="dark"]{
+ --bg:#0d1317;--surface:#151e25;--surface-2:#1b2730;--ink:#e6edf1;--ink-2:#9fb0bc;--line:#2a3a45;
+ --accent:#f0b429;--accent-ink:#1a1204;--accent-soft:#3a2d0c;
+ --good:#38c79a;--warn:#f0b429;--bad:#ff7a7a;
+ --bench:#070b0f;--bench-ink:#c9d6df;--bench-ink-2:#8798a4;--bench-line:#2c3b47;--bench-slot:#0f1920;
+ --plot-bg:#10181e;--plot-grid:#22313b;--plot-ink:#b5c3cd;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:'Bricolage Grotesque','Atkinson Hyperlegible',system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.5rem,2.6vw,2rem);font-weight:700;line-height:1.1}
+h2{font-size:1.08rem;font-weight:700}
+p{margin:0}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:1500px;margin:0 auto;padding:16px clamp(10px,2vw,24px) 40px}
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:flex-end;padding:6px 0 16px}
+.titleblock p{color:var(--ink-2);max-width:60ch;margin-top:6px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tools label{display:flex;gap:8px;align-items:center;color:var(--ink-2)}
+.btn,select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.icon{width:38px;padding:7px 0;text-align:center}
+.layout{display:grid;gap:14px;grid-template-columns:236px minmax(0,1fr) 350px;grid-template-areas:"bin mission side" "bin bench side" "bin spectra side";grid-template-rows:auto auto 1fr;align-items:start}
+.mission{grid-area:mission}.bin{grid-area:bin}.benchcard{grid-area:bench}.side{grid-area:side}.specCard{grid-area:spectra}
+@media (max-width:1040px){.layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"mission" "bench" "bin" "side" "spectra"}}
+.card,.bin,.mission{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.mission:empty{display:none}
+.mission h2{margin-bottom:4px}
+.mission .steps{margin:6px 0 0;padding-left:1.2em;color:var(--ink-2)}
+.mission .steps li{margin:2px 0}
+.mission .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.status{font-weight:700}.status.ok{color:var(--good)}
+.hinttext{margin-top:8px;padding:8px 10px;background:var(--surface-2);border-radius:8px}
+.bin{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;padding:12px}
+@media (max-width:1040px){.bin{position:static;max-height:none}}
+.bin-title{font-size:1.08rem;margin-bottom:2px}
+.bin-help{color:var(--ink-2);font-size:13px;margin-bottom:8px}
+.grp{border-top:1px solid var(--line);padding:8px 0}
+.grp>summary{cursor:pointer;font-weight:700;padding:2px 0}
+.sub{font-size:13px;color:var(--ink-2);margin:8px 0 4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:manipulation;text-align:left}
+.chip::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--sw,#888);flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.chip:hover{border-color:var(--ink-2)}
+.chip.armed{outline:2px solid var(--accent);background:var(--accent-soft)}
+.ghost{position:fixed;left:0;top:0;pointer-events:none;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.35);background:var(--surface)}
+body.dragging,body.dragging *{cursor:grabbing!important}
+.benchcard{background:var(--bench);border-radius:12px;padding:8px;border:1px solid var(--bench-line)}
+.armbar{background:var(--accent);color:var(--accent-ink);padding:7px 12px;border-radius:8px;margin-bottom:8px;font-weight:700;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.armbar[hidden]{display:none}
+.armbar button{background:transparent;border:1px solid currentColor;border-radius:6px;padding:2px 8px;cursor:pointer}
+.bench{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.bench text{font-family:'Atkinson Hyperlegible',system-ui,sans-serif;fill:var(--bench-ink)}
+.bench .muted{fill:var(--bench-ink-2)}
+.bench .beams{pointer-events:none}
+.slot{cursor:pointer;outline:none}
+.slot .frame{fill:transparent;stroke:var(--bench-line);stroke-width:1.5;stroke-dasharray:5 4}
+.slot.full .frame{fill:var(--bench-slot);stroke-dasharray:none;stroke:#3d4f5d}
+.slot.isD .frame{fill:transparent}
+.slot.sel .frame{stroke:var(--accent);stroke-width:2.5;stroke-dasharray:none}
+.slot:focus-visible .frame{stroke:var(--accent);stroke-width:2.5}
+.slot.ok-target .frame{stroke:var(--accent);stroke-dasharray:none;stroke-width:2;animation:pulse 1.1s ease-in-out infinite}
+.slot.hot .frame{fill:rgba(240,180,41,.18)}
+.slot.bad-target .frame{stroke:var(--bad);stroke-width:2.5}
+@keyframes pulse{50%{stroke-opacity:.35}}
+@media (prefers-reduced-motion:reduce){.slot.ok-target .frame{animation:none}}
+.slot .nm{font-weight:700;font-size:12.5px}
+.slot .sb{font-size:11px;fill:var(--bench-ink-2)}
+.slot .rm circle{fill:#26343f;stroke:#4a5d6b}
+.slot .rm text{font-size:12px;fill:var(--bench-ink);text-anchor:middle;pointer-events:none}
+.slot .rm:hover circle{fill:var(--bad)}
+.field{display:grid;grid-template-columns:1fr;gap:2px;margin:8px 0}
+.field label{color:var(--ink-2);font-size:13px}
+.ctl{display:grid;grid-template-columns:1fr 74px 32px;gap:8px;align-items:center}
+.ctl.nounit{grid-template-columns:1fr 74px}
+.ctl input[type=number]{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-variant-numeric:tabular-nums}
+.ctl .u{color:var(--ink-2);font-size:12px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.insp-head{display:flex;gap:8px;align-items:center;margin-bottom:4px}
+.swatch{width:14px;height:14px;border-radius:4px;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+.note{color:var(--ink-2);font-size:13px;margin:4px 0 8px}
+.side{display:flex;flex-direction:column;gap:14px}
+.card h2{margin-bottom:6px}
+fieldset{border:0;padding:0;margin:8px 0 10px}
+legend{font-weight:700;padding:0;margin-bottom:4px}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer}
+.opt input{margin-top:3px;accent-color:var(--accent)}
+.view{position:relative;margin-top:12px;border-radius:8px;overflow:hidden;background:#000}
+.view canvas{display:block;width:100%;aspect-ratio:4/3;height:auto}
+.viewtag{position:absolute;left:8px;bottom:6px;font-size:12px;color:#d6e0e7;text-shadow:0 1px 2px #000}
+.verdict{margin-top:12px;padding:10px 12px;border-radius:8px;border-left:5px solid var(--ink-2);background:var(--surface-2)}
+.verdict.good{border-color:var(--good)}.verdict.warn{border-color:var(--warn)}.verdict.bad{border-color:var(--bad)}
+.verdict h3{font-size:1rem;margin-bottom:2px}
+.predcheck{margin-top:8px;font-weight:700}
+.predcheck.ok{color:var(--good)}.predcheck.no{color:var(--warn)}
+.meters{margin-top:12px;display:grid;gap:8px}
+.meter .top2{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.meter .top2 b{font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.why{margin:12px 0 0}
+.why h3{font-size:.98rem;margin-bottom:4px}
+.why ul{margin:0;padding-left:1.1em}
+.why li{margin:6px 0}
+.why li b{display:block}
+.why li span{color:var(--ink-2)}
+details.settings{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+details.settings summary{cursor:pointer;font-weight:700}
+.check{display:flex;gap:8px;align-items:center;margin:8px 0}
+.specCard{padding:14px}
+.spec-head{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;margin-bottom:8px}
+.spec-head label{display:flex;gap:6px;align-items:center;color:var(--ink-2)}
+#spec{display:block;width:100%;height:300px;border-radius:8px;background:var(--plot-bg);touch-action:pan-y}
+.groups{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.gbtn{padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px}
+.gbtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.gbtn:disabled{opacity:.45;cursor:not-allowed}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;max-width:min(92vw,520px);z-index:70;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:16px;width:min(560px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog textarea{width:100%;height:200px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;resize:vertical}
+dialog .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;justify-content:flex-end}
+.sr{position:absolute;left:-9999px}
+/* grid bench */
+.bench .cell{fill:transparent;stroke:var(--bench-line);stroke-width:1;stroke-opacity:.55;cursor:pointer}
+.bench .cell:hover{fill:rgba(255,255,255,.04)}
+.bench.armed .cell.free{stroke:var(--accent);stroke-opacity:.7;stroke-dasharray:4 4}
+.bench .hov{fill:rgba(240,180,41,.18);stroke:var(--accent);stroke-width:2;pointer-events:none}
+.part{cursor:grab;outline:none;touch-action:none}
+.part .ring{fill:none;stroke:transparent;stroke-width:2.5}
+.part.sel .ring{stroke:var(--accent)}
+.part:focus-visible .ring{stroke:var(--accent)}
+.bench .plabel{font-size:10.5px;fill:var(--bench-ink);text-anchor:middle;paint-order:stroke;stroke:var(--bench);stroke-width:3px;stroke-linejoin:round}
+.rotb{cursor:pointer}
+.rotb circle{fill:var(--accent)}
+.rotb text{fill:var(--accent-ink);font-size:15px;font-weight:700;text-anchor:middle;dominant-baseline:central;stroke:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 2px 2px}
+.toolbar .btn{background:#17222b;border-color:#2c3b47;color:var(--bench-ink)}
+.toolbar .btn:disabled{opacity:.45;cursor:not-allowed}
+.selinfo{flex:1 1 220px;color:var(--bench-ink-2);font-size:13px;line-height:1.35}
+.selinfo b{color:var(--bench-ink)}
+.chip small{color:var(--ink-2);margin-left:2px}
+.chip:disabled{opacity:.4;cursor:not-allowed}
+.chip.dyeA{}
+.dots{display:inline-flex;gap:2px;flex:none;align-items:center}
+.dots i{width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.chip.nosw::before{display:none}
+.chip.two{flex-direction:column;align-items:flex-start;gap:2px;border-radius:12px;padding:6px 10px}
+.chip.two .ln{display:flex;gap:6px;align-items:center;font-size:12.5px}
+.chip.two em{font-style:normal;color:var(--ink-2)}
+.chip.two small{display:none}
+.wheelp{margin-top:8px;display:grid;gap:4px}
+.wheelp .wh{color:var(--bench-ink-2);font-size:12.5px;margin-bottom:2px}
+.wslot{display:flex;gap:8px;align-items:center;padding:5px 8px;border:1px solid var(--bench-line);border-radius:8px;cursor:pointer;color:var(--bench-ink);background:#111b23}
+.wslot b{width:16px;text-align:center}
+.wslot span.open{color:var(--bench-ink-2)}
+.wslot.act{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.wslot em{font-style:normal;margin-left:auto;font-size:12px;color:var(--accent)}
+.wslot .wx{margin-left:6px;background:transparent;border:1px solid var(--bench-line);color:var(--bench-ink);border-radius:6px;cursor:pointer;width:22px;height:22px;line-height:1;padding:0}
+.wslot .wx[hidden]{display:none}
+.wslot .wx:hover{background:var(--bad);border-color:var(--bad)}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:7px 14px;cursor:pointer;font-weight:700;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.camblock{margin:12px 0 0}
+.camblock .view{margin-top:0}
+.camstat{font-size:13px;color:var(--ink-2);margin-top:4px}
+.lampctl{margin-top:8px}
+.toolbar .lampctl .btn{background:#17222b;border-color:#2c3b47;color:var(--bench-ink)}
+
+.selinfo .mv{display:block;margin-top:4px;font-style:normal;color:var(--accent)}
+
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+ <div class="titleblock">
+  <h1>Light path bench</h1>
+  <p>Design a fluorescence microscope on the grid. Place, turn and combine the parts so that the light reaches the sample and the glow reaches the camera.</p>
+ </div>
+ <div class="tools">
+  <div class="seg" id="modeSeg" role="group" aria-label="Mode"><button type="button" data-mode="simple" aria-pressed="true" title="One lamp, one camera, single-colour filters">Simple</button><button type="button" data-mode="adv" aria-pressed="false" title="LEDs, combiners, splitters, several cameras, transmitted light, wheels, turret">Advanced</button></div>
+  <label>Start from <select id="startSel" aria-label="Choose a task or example"></select></label>
+  <button class="btn" id="btnClear" type="button">Clear bench</button>
+  <button class="btn" id="btnShare" type="button">Save or load</button>
+  <button class="btn icon" id="btnTheme" type="button" aria-label="Switch between light and dark theme" title="Light or dark">◐</button>
+ </div>
+</header>
+<div class="layout">
+ <section class="mission" id="mission"></section>
+ <aside class="bin" id="bin" aria-label="Parts"></aside>
+ <section class="benchcard">
+  <div class="armbar" id="armbar" hidden></div>
+  <svg id="bench" class="bench" viewBox="0 0 792 576" role="group" aria-label="Optical bench grid, 11 columns by 8 rows"></svg>
+  <div class="toolbar">
+   <button class="btn" id="btnRotL" type="button" disabled aria-label="Rotate counterclockwise">↺ Rotate</button>
+   <button class="btn" id="btnRotR" type="button" disabled aria-label="Rotate clockwise (R)">↻ Rotate</button>
+   <button class="btn" id="btnRemove" type="button" disabled>Remove</button>
+   <div class="selinfo" id="selinfo">Select a part on the grid to turn, move or remove it. With a part selected, click any empty cell to move it there.</div>
+  </div>
+ </section>
+ <aside class="side">
+  <section class="card" id="testCard">
+   <h2>Predict, then test</h2>
+   <fieldset id="predBox"></fieldset>
+   <button class="btn primary" id="btnLamp" type="button">Switch lamps on</button>
+   <div id="cams" aria-label="Simulated camera images"></div>
+   <div id="result"></div>
+  </section>
+ </aside>
+ <section class="card specCard" id="specCard">
+  <div class="spec-head"><h2>Spectra</h2><label><input type="checkbox" id="logToggle"> Log scale (optical density)</label></div>
+  <canvas id="spec" aria-label="Spectra of the parts on the bench"></canvas>
+  <div class="groups" id="groups"></div>
+  <p class="note">Hover or drag across the plot to read values. The coloured strip under the axis shows visible wavelengths; ultraviolet and infrared are grey.</p>
+ </section>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg">
+ <h2>Save or load a design</h2>
+ <p class="note">Copy this text to keep or share your design. To load one, paste it here and choose Load.</p>
+ <textarea id="dlgText" spellcheck="false" aria-label="Design as text"></textarea>
+ <div class="row"><button class="btn" id="dlgCopy" type="button">Copy</button><button class="btn primary" id="dlgLoad" type="button">Load</button><button class="btn" id="dlgClose" type="button">Close</button></div>
+</dialog>
+</div>
+
+<script>
+//==CORE-START
+const CORE=(function(){
+const L0=300,L1=800,N=L1-L0+1;
+const WL=new Float64Array(N);for(let i=0;i<N;i++)WL[i]=L0+i;
+const sig=x=>1/(1+Math.exp(-x));
+const gauss=(l,c,s)=>{const z=(l-c)/s;return Math.exp(-0.5*z*z)};
+const Z=()=>new Float64Array(N);
+const mk=fn=>{const a=Z();for(let i=0;i<N;i++)a[i]=fn(WL[i]);return a};
+const sum=a=>{let s=0;for(let i=0;i<N;i++)s+=a[i];return s};
+const dot=(a,b)=>{let s=0;for(let i=0;i<N;i++)s+=a[i]*b[i];return s};
+const mx=a=>{let m=0;for(let i=0;i<N;i++)if(a[i]>m)m=a[i];return m};
+const mul=(...xs)=>{const a=new Float64Array(N).fill(1);for(const x of xs){if(!x)continue;for(let i=0;i<N;i++)a[i]*=x[i]}return a};
+const add=(a,b)=>{const o=Z();for(let i=0;i<N;i++)o[i]=a[i]+b[i];return o};
+const scl=(a,k)=>{const o=Z();for(let i=0;i<N;i++)o[i]=a[i]*k;return o};
+const cent=a=>{const s=sum(a);if(s<=0)return 0;let c=0;for(let i=0;i<N;i++)c+=WL[i]*a[i];return c/s};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+
+/* colour */
+const g2=(l,mu,s1,s2)=>{const z=(l-mu)/(l<mu?s1:s2);return Math.exp(-0.5*z*z)};
+const cmf=l=>[1.056*g2(l,599.8,37.9,31.0)+0.362*g2(l,442.0,16.0,26.7)-0.065*g2(l,501.1,20.4,26.2),0.821*g2(l,568.8,46.9,40.5)+0.286*g2(l,530.9,16.3,31.1),1.217*g2(l,437.0,11.8,36.0)+0.681*g2(l,459.0,26.0,13.8)];
+const CMX=mk(l=>cmf(l)[0]),CMY=mk(l=>cmf(l)[1]),CMZ=mk(l=>cmf(l)[2]);
+const toCss=c=>'rgb('+c.map(v=>Math.round(255*Math.pow(clamp(v,0,1),1/2.2))).join(',')+')';
+function xyz2rgb(X,Y,Z_){let r=3.2406*X-1.5372*Y-0.4986*Z_,g=-0.9689*X+1.8758*Y+0.0415*Z_,b=0.0557*X-0.2040*Y+1.0570*Z_;r=Math.max(r,0);g=Math.max(g,0);b=Math.max(b,0);const m=Math.max(r,g,b);return m>0?[r/m,g/m,b/m]:[1,1,1]}
+function specColor(a){
+ let X=0,Y=0,Z_=0,tot=0,vis=0,uv=0;
+ for(let i=0;i<N;i++){const v=a[i];if(!(v>0))continue;tot+=v;const l=WL[i];if(l>=400&&l<=700)vis+=v;if(l<400)uv+=v;X+=v*CMX[i];Y+=v*CMY[i];Z_+=v*CMZ[i]}
+ if(tot<=0)return {rgb:[1,1,1],css:'rgb(136,136,136)',vis:0,uv:0,invisible:true,empty:true};
+ const rgb=xyz2rgb(X,Y,Z_),visF=vis/tot,uvF=uv/tot,invisible=visF<0.4;
+ return {rgb,css:invisible?(uvF>0.5?'rgb(139,108,255)':'rgb(176,69,58)'):toCss(rgb),vis:visF,uv:uvF,invisible};
+}
+const monoColor=l=>toCss(xyz2rgb(...cmf(l)));
+
+/* spectra of parts */
+const LAMP=(()=>{const s=mk(l=>(0.3+0.7*sig((l-390)/25))*(1+0.25*gauss(l,470,12))*sig(-(l-770)/20));return scl(s,100/sum(s))})();
+const FLUORS={
+ dapi:{key:'dapi',mask:'nuc',label:'DAPI',ex:358,em:461,qy:.58,ec:27000,wEx:1.6,wEm:1.8,s2a:0,s2c:400},
+ gfp:{key:'gfp',mask:'pha',label:'GFP',ex:488,em:507,qy:.60,ec:56000,wEx:1,wEm:1,s2c:397,s2a:.18},
+ mch:{key:'mch',mask:'gut',label:'mCherry',ex:587,em:610,qy:.22,ec:72000,wEx:1.15,wEm:1.1,s2c:400,s2a:.1}
+};
+const _fc=new Map();
+function fluorSpecs(f){
+ if(_fc.has(f.key))return _fc.get(f.key);
+ const sl=f.ex*0.035*f.wEx,sr=f.ex*0.019*f.wEx;
+ let ex=mk(l=>(l<f.ex?gauss(l,f.ex,sl):gauss(l,f.ex,sr))+(f.s2a?f.s2a*gauss(l,f.s2c,22):0));ex=scl(ex,1/mx(ex));
+ const el=f.em*0.022*f.wEm,er=f.em*0.046*f.wEm;
+ let em=mk(l=>l<f.em?gauss(l,f.em,el):gauss(l,f.em,er));const emPk=scl(em,1/mx(em));em=scl(em,1/sum(em));
+ const r={ex,em,emPk};_fc.set(f.key,r);return r;
+}
+const OBJ=mk(l=>0.9*sig((l-345)/9));
+const OMEGA=0.2,ABS_REF=0.01,SCAT=0.005;
+const QE=mk(l=>{const p=[[300,.05],[350,.2],[400,.55],[450,.8],[500,.9],[560,.95],[600,.92],[650,.78],[700,.6],[750,.4],[800,.25]];if(l<=p[0][0])return p[0][1];for(let i=1;i<p.length;i++){if(l<=p[i][0]){const[x0,y0]=p[i-1],[x1,y1]=p[i];return y0+(y1-y0)*(l-x0)/(x1-x0)}}return .25});
+const win=(l,c,w)=>Math.exp(-Math.LN2*Math.pow(Math.abs(l-c)/(w/2),8));
+
+/* colour bands: every filter and dichroic is built from these, so all parts are cross-compatible */
+const BANDS={
+ uv:{name:'UV',c:370,w:40,zone:[0,420],col:'#8b6cff'},
+ blue:{name:'blue',c:470,w:40,zone:[420,497],col:'#3d7bff'},
+ green:{name:'green',c:522,w:45,zone:[497,551],col:'#2fc46b'},
+ orange:{name:'orange',c:575,w:34,zone:[551,596],col:'#ff9a1f'},
+ red:{name:'red',c:637,w:66,zone:[596,1000],col:'#ff4a3d'}
+};
+const BORDER=['uv','blue','green','orange','red'];
+const bn=k=>BANDS[k].name,cap=s=>s==='UV'?s:s[0].toUpperCase()+s.slice(1);
+const listText=ks=>{const n=ks.map(bn);return n.length<2?n.join(''):n.slice(0,-1).join(', ')+' and '+n[n.length-1]};
+const colourOf=l=>{for(const k of BORDER){const z=BANDS[k].zone;if(l>=z[0]&&l<z[1])return k}return 'red'};
+const FLT=(id,bands,limit)=>({id,kind:'filter',type:'band',bands,name:bands.map(b=>cap(bn(b))).join(' + '),limit});
+const LPF=(id,from,limit)=>{const bands=BORDER.slice(BORDER.indexOf(from));return {id,kind:'filter',type:'lp',cut:BANDS[from].zone[0]-1,bands,name:cap(bn(from))+' \u2192 red',limit}};
+const DMF=(id,refl,limit)=>{const pass=BORDER.filter(k=>!refl.includes(k));return {id,kind:'dichroic',refl,pass,name:'Reflects '+refl.map(bn).join(' + '),limit}};
+const LED=(id,band,c,w)=>({id,kind:'lamp',type:'led',c,w,power:25,col:BANDS[band].col,group:'Light sources',name:cap(bn(band))+' LED',limit:1,desc:'A single-colour LED. It shines in the direction it faces. Several lamps can share the bench; select a lamp to switch it on or off.'});
+const PARTS=[
+ {id:'lamp',kind:'lamp',type:'white',power:100,col:'#ffe9a8',group:'Light sources',name:'White lamp',limit:1,desc:'Broad white light, from ultraviolet to infrared. It shines in the direction it faces.'},
+ LED('led_uv','uv',372,12),LED('led_blue','blue',468,24),LED('led_green','green',525,30),LED('led_orange','orange',575,16),LED('led_red','red',637,18),
+ {id:'mirror',kind:'mirror',group:'Mirrors and dichroics',name:'Mirror',limit:4,desc:'Reflects every colour. Turn it to reflect the other way: / or \\.'},
+ {id:'split',kind:'splitter',group:'Beam splitters and combiners',name:'Beam splitter 50/50',limit:2,desc:'Sends half of the light straight on and reflects half, whatever the colour. Used backwards it merges two beams into one, at a cost of half the light. Turn it like a mirror.'},
+ DMF('d_uv',['uv'],1),DMF('d_uvb',['uv','blue'],1),DMF('d_uvbg',['uv','blue','green'],1),DMF('d_uvbgo',['uv','blue','green','orange'],1),
+ DMF('d_bo',['blue','orange'],1),DMF('d_uvo',['uv','orange'],1),DMF('d_or',['orange','red'],1),
+ {id:'turret',kind:'turret',group:'Mirrors and dichroics',name:'Dichroic turret (4 positions)',limit:1,desc:'Holds up to four dichroics and turns the chosen one into the beam. Turn it like a mirror to choose the diagonal. An empty position lets all light straight through.'},
+ {id:'wheel',kind:'wheel',group:'Filters',name:'Filter wheel (4 positions)',limit:2,desc:'Holds up to four filters and turns the chosen one into the beam. An empty position lets all colours through.'},
+ FLT('f_uv',['uv'],2),FLT('f_blue',['blue'],2),FLT('f_green',['green'],2),FLT('f_orange',['orange'],2),FLT('f_red',['red'],2),
+ FLT('f_uv_blue',['uv','blue'],1),FLT('f_blue_green',['blue','green'],1),FLT('f_blue_orange',['blue','orange'],1),FLT('f_uv_orange',['uv','orange'],1),FLT('f_green_red',['green','red'],1),FLT('f_blue_red',['blue','red'],1),
+ FLT('f_uv_blue_orange',['uv','blue','orange'],1),FLT('f_blue_green_red',['blue','green','red'],1),
+ LPF('f_lp_green','green',1),LPF('f_lp_orange','orange',1),
+ {id:'s_dapi',kind:'sample',group:'Sample (one at a time)',name:'DAPI nuclei',dyes:['dapi'],limit:1,desc:'Worms with DAPI-stained nuclei (blue).'},
+ {id:'s_gfp',kind:'sample',group:'Sample (one at a time)',name:'GFP worms',dyes:['gfp'],limit:1,desc:'Worms with GFP in the pharynx (green).'},
+ {id:'s_mch',kind:'sample',group:'Sample (one at a time)',name:'mCherry worms',dyes:['mch'],limit:1,desc:'Worms with mCherry in the intestine (red).'},
+ {id:'s_both',kind:'sample',group:'Sample (one at a time)',name:'GFP + mCherry worms',dyes:['gfp','mch'],limit:1,desc:'Green pharynx and red intestine.'},
+ {id:'s_dapimch',kind:'sample',group:'Sample (one at a time)',name:'DAPI + mCherry worms',dyes:['dapi','mch'],limit:1,desc:'Blue nuclei and red intestine.'},
+ {id:'s_dapigfp',kind:'sample',group:'Sample (one at a time)',name:'DAPI + GFP worms',dyes:['dapi','gfp'],limit:1,desc:'Blue nuclei and green pharynx.'},
+ {id:'s_all',kind:'sample',group:'Sample (one at a time)',name:'DAPI + GFP + mCherry worms',dyes:['dapi','gfp','mch'],limit:1,desc:'Blue nuclei, green pharynx and red intestine.'},
+ {id:'camera',kind:'camera',group:'Camera',name:'Camera',limit:3,limitSimple:1,desc:'Records the light that enters its lens.'}
+];
+const SIMPLE=new Set(['lamp','mirror','d_uv','d_uvb','d_uvbg','d_uvbgo','f_uv','f_blue','f_green','f_orange','f_red','s_dapi','s_gfp','s_mch','camera']);
+const PID={};PARTS.forEach(p=>{if(!p.group)p.group=p.kind==='dichroic'?'Mirrors and dichroics':'Filters';p.short=p.name;p.adv=!SIMPLE.has(p.id);PID[p.id]=p});
+PID.wheel.short='Filter wheel';PID.turret.short='Dichroic turret';PID.split.short='Splitter 50/50';
+const dotsOf=d=>d.kind==='filter'?d.bands.map(b=>BANDS[b].col):d.kind==='lamp'?[d.col]:[];
+const _sc=new Map();
+function filterT(d){
+ if(_sc.has(d.id))return _sc.get(d.id);const fl=1e-6,tp=0.93;let a;
+ if(d.type==='band')a=mk(l=>{let m=0;for(const k of d.bands){const B=BANDS[k];m=Math.max(m,win(l,B.c,B.w))}return fl+(tp-fl)*m});
+ else{const s=8/4.394;a=mk(l=>fl+(tp-fl)*sig((l-d.cut)/s))}
+ _sc.set(d.id,a);return a;
+}
+function dichroic(d){
+ if(_sc.has(d.id))return _sc.get(d.id);const s=6/4.394;
+ const mask=mk(l=>{let m=0;for(const k of d.refl){const z=BANDS[k].zone;m=Math.max(m,sig((l-z[0])/s)*sig((z[1]-l)/s))}return m});
+ const r={T:Z(),R:Z(),mask};for(let i=0;i<N;i++){r.T[i]=0.01+0.92*(1-mask[i]);r.R[i]=0.95*mask[i]+0.06*(1-mask[i])}
+ _sc.set(d.id,r);return r;
+}
+const HALF={T:mk(()=>0.47),R:mk(()=>0.47)};
+const _ls=new Map();
+function lampSpec(d){if(_ls.has(d.id))return _ls.get(d.id);let a;if(d.type==='white')a=LAMP;else{const sh=mk(l=>gauss(l,d.c,d.w/2.355));a=scl(sh,d.power/sum(sh))}_ls.set(d.id,a);return a}
+const TS=mk(l=>0.8*(0.85+0.15*sig((l-480)/40)));
+function info(d){
+ if(d.kind==='filter')return d.type==='lp'?'Passes '+bn(d.bands[0])+' and every redder colour. Blocks the bluer ones.':'Passes '+listText(d.bands)+'. Blocks the other colours.';
+ if(d.kind==='dichroic')return 'Reflects '+listText(d.refl)+': those colours turn the corner. Passes '+listText(d.pass)+': those go straight on. Both happen at once, so light splits in two. Used backwards, it can merge two beams of different colours into one.';
+ return d.desc||'';
+}
+const lab=d=>d.kind==='filter'?'the '+d.name+' filter':d.kind==='dichroic'?'the dichroic that reflects '+d.refl.map(bn).join(' + '):'the '+d.name.toLowerCase();
+const Lab=d=>{const t=lab(d);return t[0].toUpperCase()+t.slice(1)};
+
+/* geometry */
+const COLS=11,ROWS=8;
+const DIRS=[[1,0],[0,1],[-1,0],[0,-1]],DIRNAME=['right','down','left','up'];
+const REFL={'/':[3,2,1,0],'\\':[1,0,3,2]};
+const orient=rot=>rot%2===0?'/':'\\';
+let _u=0;const uid=()=>'u'+(++_u);
+const put=(pid,c,r,rot)=>({uid:uid(),pid,c,r,rot:rot||0});
+const ONE=new Float64Array(N).fill(1);
+
+function trace(inst,opt){
+ const geo=!!(opt&&opt.geo);
+ const grid=new Map();inst.forEach(p=>grid.set(p.c+','+p.r,p));
+ const kindOf=p=>PID[p.pid].kind;
+ const allLamps=inst.filter(p=>kindOf(p)==='lamp'),lamps=allLamps.filter(p=>p.on!==false);
+ const smp=inst.find(p=>kindOf(p)==='sample'),cams=inst.filter(p=>kindOf(p)==='camera');
+ const camIdx=new Map(cams.map((p,i)=>[p,i]));
+ const R={edges:new Map(),events:[],cams:cams.map((p,i)=>({inst:p,idx:i,cam:{}})),Es:Z(),missing:[],abs:[0,0,0],flGen:[0,0,0],trGen:0,sample:smp?PID[smp.pid]:null,lampP:0};
+ if(!allLamps.length)R.missing.push('a lamp');if(!smp)R.missing.push('a sample');if(!cams.length)R.missing.push('a camera');
+ R.complete=R.missing.length===0;R.allOff=allLamps.length>0&&lamps.length===0;
+ lamps.forEach(l=>{R.lampP+=geo?1:sum(lampSpec(PID[l.pid]))});
+ if(!lamps.length)return R;
+ const q=[];const push=(c,r,d,spec,tag,last)=>q.push({c,r,d,spec,tag,last});
+ lamps.forEach(l=>push(l.c,l.r,l.rot,geo?ONE:lampSpec(PID[l.pid]),'ex',{name:'the lamp',how:'lamp'}));
+ const thr=geo?-1:R.lampP*1e-10;const visits=new Map();let guard=0;
+ const ev=(type,b,p,extra)=>R.events.push(Object.assign({type,tag:b.tag,lost:p,last:b.last,dir:b.d},extra));
+ while(q.length&&guard++<12000){
+  const b=q.shift();const p=sum(b.spec);if(p<=thr)continue;
+  const vk=b.c+','+b.r+','+b.d+','+b.tag;const vv=visits.get(vk)||0;if(vv>=4)continue;visits.set(vk,vv+1);
+  const ek=b.c+','+b.r+','+b.d;let e=R.edges.get(ek);if(!e){e={c:b.c,r:b.r,d:b.d,spec:Z(),tags:new Set()};R.edges.set(ek,e)}
+  for(let i=0;i<N;i++)e.spec[i]+=b.spec[i];e.tags.add(b.tag);
+  const nc=b.c+DIRS[b.d][0],nr=b.r+DIRS[b.d][1];
+  if(nc<0||nr<0||nc>=COLS||nr>=ROWS){ev('edge',b,p);continue}
+  const part=grid.get(nc+','+nr);
+  if(!part){push(nc,nr,b.d,b.spec,b.tag,b.last);continue}
+  const def=PID[part.pid],k=def.kind;
+  if(k==='filter'||k==='wheel'){
+   if(b.d%2!==part.rot%2){ev('edgeon',b,p,{part:def});continue}
+   const fd=k==='wheel'?(PID[(part.slots||[])[part.pos||0]]||null):def;
+   const s2=(geo||!fd)?b.spec:mul(b.spec,filterT(fd)),p2=sum(s2);
+   if(!geo&&fd&&p2<p*0.01)ev('blocks',b,p-p2,{part:fd,cent:cent(b.spec),pass:p2/p,wheel:k==='wheel'});
+   push(nc,nr,b.d,s2,b.tag,{name:k==='wheel'?'the filter wheel':lab(def),how:'filter'});
+  }else if(k==='mirror'){
+   push(nc,nr,REFL[orient(part.rot)][b.d],geo?b.spec:scl(b.spec,.97),b.tag,{name:'the mirror',how:'mirror'});
+  }else if(k==='dichroic'||k==='turret'||k==='splitter'){
+   const dd=k==='turret'?(PID[(part.slots||[])[part.pos||0]]||null):def;
+   if(!dd){push(nc,nr,b.d,b.spec,b.tag,{name:'the dichroic turret',how:'filter'});continue}
+   const o=REFL[orient(part.rot)][b.d],x=k==='splitter'?HALF:dichroic(dd);
+   const nm=k==='splitter'?'the beam splitter':lab(dd);
+   push(nc,nr,b.d,geo?b.spec:mul(b.spec,x.T),b.tag,{name:nm,how:'transmitted'});push(nc,nr,o,geo?b.spec:mul(b.spec,x.R),b.tag,{name:nm,how:'reflected'});
+  }else if(k==='sample'){
+   const epi=b.d===(part.rot+2)%4,dia=b.d===part.rot;
+   if(!epi&&!dia){ev('side',b,p,{part:def,rot:part.rot});continue}
+   if(b.tag!=='ex'){ev('absorb',b,p,{part:def});continue}
+   const last={name:'the sample',how:'sample'},out=part.rot;
+   if(geo){R.Es=ONE;push(nc,nr,out,ONE,epi?'fl0':'tr',last);continue}
+   const Es=epi?mul(b.spec,OBJ):mul(b.spec,TS);R.Es=add(R.Es,Es);
+   def.dyes.forEach((key,i)=>{const f=FLUORS[key],sp=fluorSpecs(f);const a=dot(Es,scl(sp.ex,ABS_REF*f.ec/50000));R.abs[i]+=a;
+    const fl=mul(scl(sp.em,a*f.qy*OMEGA),OBJ);R.flGen[i]+=sum(fl);push(nc,nr,out,fl,'fl'+i,last)});
+   if(epi)push(nc,nr,out,scl(mul(Es,OBJ),SCAT),'bg',last);
+   else{const tr=mul(Es,OBJ);R.trGen+=sum(tr);push(nc,nr,out,tr,'tr',last)}
+  }else if(k==='camera'){
+   if(b.d!==(part.rot+2)%4){ev('side',b,p,{part:def,rot:part.rot});continue}
+   const c=R.cams[camIdx.get(part)];c.cam[b.tag]=add(c.cam[b.tag]||Z(),b.spec);
+  }else if(k==='lamp'){ev('absorb',b,p,{part:def})}
+ }
+ return R;
+}
+const REF={};let TRREF=0;
+function analyze(inst){
+ const R=trace(inst,{geo:false});
+ if(!R.complete||R.allOff)return R;
+ const dyes=R.sample.dyes.map(k=>FLUORS[k]);R.dyes=dyes;
+ R.camInfo=R.cams.map(c=>{
+  const sig=dyes.map((f,i)=>c.cam['fl'+i]?dot(c.cam['fl'+i],QE):0);
+  const ex=c.cam.ex?dot(c.cam.ex,QE):0,bgs=c.cam.bg?dot(c.cam.bg,QE):0,tr=c.cam.tr?dot(c.cam.tr,QE):0;
+  const sigTot=sig.reduce((a,b)=>a+b,0),bgFl=ex+bgs+tr,sb=sigTot/(bgFl+1e-15);
+  const rel=sig.map((s,i)=>REF[dyes[i].key]?s/REF[dyes[i].key]:0);
+  const trRel=TRREF?tr/TRREF:0,bfShare=tr/(tr+ex+bgs+sigTot+1e-15);
+  return {idx:c.idx,inst:c.inst,cam:c.cam,sig,ex,bgs,tr,bgFl,sigTot,sb,rel,trRel,bfShare,clean:rel.map(r=>r>=0.25&&sb>=3)};
+ });
+ R.rel=dyes.map((f,i)=>Math.max(...R.camInfo.map(c=>c.rel[i])));
+ R.dyeClean=dyes.map((f,i)=>R.camInfo.some(c=>c.clean[i]));
+ R.sb=Math.max(...R.camInfo.map(c=>c.sb));
+ R.exFrac=R.lampP>0?sum(R.Es)/R.lampP:0;
+ R.ov=dyes.map(f=>sum(R.Es)>0?dot(R.Es,fluorSpecs(f).ex)/sum(R.Es):0);
+ R.refTot=dyes.reduce((t,f)=>t+REF[f.key],0);
+ return R;
+}
+function verdict(a){
+ if(!a.complete)return {key:'incomplete'};
+ if(a.allOff)return {key:'off'};
+ const nd=a.dyes.length,nClean=a.dyeClean.filter(Boolean).length,best=Math.max(...a.rel);
+ if(nClean===nd)return {key:'good'};
+ if(nClean>0)return {key:'partial'};
+ if(a.camInfo.some(c=>c.trRel>=0.1&&c.bfShare>=0.6))return {key:'bf'};
+ if(a.camInfo.some(c=>c.trRel>=0.02&&c.bfShare>=0.5))return {key:'bfdim'};
+ if(best<0.03){const bg=Math.max(...a.camInfo.map(c=>c.bgFl));return {key:bg/a.refTot>0.03?'bgonly':'dark'}}
+ return {key:a.sb<3?'washed':'dim'};
+}
+function explain(e,label,lc){lc=lc||label;
+ const side=DIRNAME[e.dir],last=e.last||{};let how='';
+ const after=last.name&&last.how!=='lamp'?' after '+(last.how==='sample'?'the sample':last.name):'';
+ switch(e.type){
+  case 'edge':
+   how=last.how==='transmitted'?'It passed straight through '+last.name+'. A dichroic reflects some colours and passes the others, and this colour is on the passing side.'
+    :last.how==='reflected'?'It was reflected by '+last.name+' in a direction that leads nowhere. Try turning that part to its other diagonal.'
+    :last.how==='mirror'?'Turn the mirror to its other diagonal, or move it.'
+    :last.how==='lamp'?'The lamp faces off the board. Rotate it.'
+    :last.how==='sample'?'It left through the objective the way it came in, and nothing catches it.'
+    :'Redirect it with a mirror or a dichroic.';
+   return {title:label+' leaves the board',body:label+' runs off the '+side+' edge'+after+'. '+how};
+  case 'side':{const nm=e.part.kind==='sample'?'objective':'camera';
+   return {title:label+' hits the wrong side of the '+nm,body:'The '+nm+' faces '+DIRNAME[e.rot]+'. Light only gets in through that face, so rotate the part until it faces the incoming light.'}}
+  case 'edgeon':
+   return {title:Lab(e.part)+' is turned edge-on',body:'Light has to pass through the face of a filter or wheel. Here it meets the edge and stops. Rotate it a quarter turn.'};
+  case 'blocks':
+   return {title:Lab(e.part)+(e.wheel?' (in the wheel)':'')+' blocks '+lc,body:'Only '+(e.pass*100<0.1?'a tiny fraction':e.pass*100<10?(e.pass*100).toFixed(1)+'%':Math.round(e.pass*100)+'%')+' gets through. The light arriving there is mostly '+bn(colourOf(e.cent))+', and this filter passes '+(e.part.type==='lp'?bn(e.part.bands[0])+' and redder':listText(e.part.bands))+'.'};
+  case 'absorb':
+   return {title:label+' runs into the '+e.part.name.toLowerCase(),body:'It is absorbed there and goes no further.'};
+ }
+ return null;
+}
+function diagnose(a){
+ const out=[];if(!a.complete||a.allOff)return out;const ev=a.events;
+ const top=(tag,min,n)=>ev.filter(e=>e.tag===tag&&e.lost>min).sort((x,y)=>y.lost-x.lost).slice(0,n);
+ const push=(sev,t)=>{if(t)out.push(Object.assign({sev},t))};
+ const v=verdict(a);if(v.key==='bf'||v.key==='bfdim')return out;
+ const multi=a.camInfo.length>1,cn=c=>multi?'camera '+(c.idx+1):'the camera',Cn=c=>multi?'Camera '+(c.idx+1):'The camera';
+ if(a.exFrac<0.02){top('ex',a.lampP*0.02,2).forEach((e,i)=>push(100-i,explain(e,'The lamp light','the lamp light')))}
+ a.dyes.forEach((f,i)=>{
+  if(a.dyeClean[i]||a.rel[i]>=0.25)return;
+  if(a.exFrac>=0.02&&a.ov[i]<0.15){push(90,{title:'The light reaching the sample does not suit '+f.label,body:'It is mostly '+bn(colourOf(cent(a.Es)))+', but '+f.label+' absorbs '+bn(colourOf(f.ex))+' light. Filter or choose the lamp so the right colour reaches the sample.'});return}
+  if(a.flGen[i]>0){const e=top('fl'+i,a.flGen[i]*0.1,1)[0];if(e)push(80-i,explain(e,f.label+' fluorescence'))}
+ });
+ for(const c of a.camInfo){if(c.ex>0.5*c.bgFl&&c.bgFl>0.03*a.refTot)push(96,{title:'Lamp light shines straight into '+cn(c),body:'It arrives without going through the sample, and swamps the fluorescence. Keep the camera out of the lamp\u2019s beam, or block those colours before the camera.'})}
+ const cm=a.camInfo.slice().sort((x,y)=>y.sigTot-x.sigTot)[0];
+ if(cm&&cm.sigTot>=0.03*a.refTot/a.dyes.length&&cm.sb<10&&cm.ex<=0.5*cm.bgFl){
+  if(cm.tr>0.5*cm.bgFl)push(cm.sb<3?95:60,{title:'Light from behind the sample reaches '+cn(cm),body:'Transmitted light (mostly '+bn(colourOf(cent(cm.cam.tr)))+') is drowning the fluorescence. Block that colour before the camera, or switch that lamp off.'});
+  else push(cm.sb<3?95:60,{title:'Lamp light is leaking into '+cn(cm),body:'Some lamp light scatters back from the sample and reaches the camera (mostly '+bn(colourOf(cent(cm.cam.bg||Z())))+'). Block that colour before the camera, and keep it from reaching the sample at all.'});
+ }
+ if(a.trGen>0&&(v.key==='dark'||v.key==='bgonly'||v.key==='dim')){const e=top('tr',a.trGen*0.1,1)[0];if(e)push(50,explain(e,'The transmitted light','the transmitted light'))}
+ out.sort((x,y)=>y.sev-x.sev);return out.slice(0,4);
+}
+function scanWheels(inst){
+ const wh=inst.filter(p=>{const k=PID[p.pid].kind;return k==='wheel'||k==='turret'});if(!wh.length)return null;
+ const poss=wh.map(w=>{const s=w.slots||[null,null,null,null],out=[];let open=false;for(let i=0;i<4;i++){if(s[i])out.push(i);else if(!open){open=true;out.push(i)}}return out});
+ let combos=[[]];for(let k=0;k<wh.length;k++){const nx=[];for(const cb of combos)for(const i of poss[k])nx.push(cb.concat(i));combos=nx}
+ const out=[];let dyes=null;
+ for(const pos of combos){const test=inst.map(p=>{const k=wh.indexOf(p);return k>=0?Object.assign({},p,{pos:pos[k]}):p});const a=analyze(test);
+  if(!a.complete)return {complete:false};if(a.allOff)return {complete:false};dyes=a.dyes;out.push({pos,rel:a.rel,sb:a.sb,clean:a.dyeClean.slice()})}
+ return {complete:true,dyes,combos:out,covered:dyes.map((f,i)=>out.some(c=>c.clean[i])),wh};
+}
+function checkTask(mode,a,scan,inst){
+ if(mode==='sequence')return !!(scan&&scan.complete&&scan.covered.every(Boolean));
+ if(!a.complete||a.allOff)return false;
+ if(mode==='live')return verdict(a).key==='good';
+ if(mode==='cams2')return a.dyeClean.every(Boolean)&&a.camInfo.filter(c=>c.clean.some(Boolean)).length>=2;
+ if(mode==='bf')return a.camInfo.some(c=>c.trRel>=0.1&&c.bfShare>=0.6);
+ if(mode==='bfred')return a.camInfo.some(c=>c.trRel>=0.03&&c.bfShare>=0.6&&c.cam.tr&&cent(c.cam.tr)>=596);
+ if(mode==='dia')return verdict(a).key==='good'&&a.trGen>0&&!inst.some(p=>{const k=PID[p.pid].kind;return k==='dichroic'||k==='turret'});
+ return false;
+}
+
+/* layouts */
+const epi=(ex,dm,em,sm)=>[put('lamp',1,3,0),...(ex?[put(ex,3,3,0)]:[]),put(dm,5,3,0),put(sm,5,1,1),...(em?[put(em,5,5,1)]:[]),put('camera',5,6,3)];
+const holder=(pid,c,r,rot,slots,pos)=>{const w=put(pid,c,r,rot);w.slots=slots.concat([null,null,null,null]).slice(0,4);w.pos=pos||0;return w};
+const LAYOUTS={
+ gfp:()=>epi('f_blue','d_uvb','f_green','s_gfp'),
+ mch:()=>epi('f_orange','d_uvbgo','f_red','s_mch'),
+ dapi:()=>epi('f_uv','d_uv','f_blue','s_dapi'),
+ both:()=>epi('f_blue_orange','d_bo','f_green_red','s_both'),
+ dapimch:()=>epi('f_uv_orange','d_uvo','f_blue_red','s_dapimch'),
+ wheels:()=>[put('lamp',1,3,0),holder('wheel',3,3,0,['f_blue','f_orange']),put('d_bo',5,3,0),put('s_both',5,1,1),holder('wheel',5,5,1,['f_green','f_red']),put('camera',5,6,3)],
+ turret:()=>[put('lamp',1,3,0),holder('wheel',3,3,0,['f_blue','f_orange']),holder('turret',5,3,0,['d_uvb','d_uvbgo']),put('s_both',5,1,1),holder('wheel',5,5,1,['f_green','f_red']),put('camera',5,6,3)],
+ seq3:()=>[put('lamp',1,3,0),holder('wheel',3,3,0,['f_uv','f_blue','f_orange']),holder('turret',5,3,0,['d_uv','d_uvb','d_uvbgo']),put('s_all',5,1,1),holder('wheel',5,5,1,['f_blue','f_green','f_red']),put('camera',5,6,3)],
+ bf:()=>[put('lamp',5,0,1),put('s_gfp',5,1,1),put('camera',5,3,3)],
+ bfred:()=>[put('lamp',5,0,1),put('s_gfp',5,1,1),put('f_red',5,2,1),put('camera',5,3,3)],
+ dia:()=>[put('led_blue',5,0,1),put('f_blue',5,1,1),put('s_gfp',5,2,1),put('f_green',5,3,1),put('camera',5,5,3)],
+ cams2:()=>[put('lamp',1,3,0),put('f_blue_orange',3,3,0),put('d_bo',5,3,0),put('s_both',5,1,1),put('d_uvbg',5,5,0),put('camera',3,5,0),put('camera',5,7,3)],
+ combine:()=>[put('led_blue',1,3,0),put('led_orange',3,5,3),put('d_or',3,3,0),put('d_bo',5,3,0),put('s_both',5,1,1),put('f_green_red',5,5,1),put('camera',5,6,3)],
+ wrongway:()=>{const l=epi('f_blue','d_uvb','f_green','s_gfp');l.find(p=>p.pid==='d_uvb').rot=1;return l},
+ direct:()=>[put('lamp',1,3,0),put('d_uvb',5,3,0),put('s_gfp',5,1,1),put('camera',8,3,2)],
+ noexc:()=>epi(null,'d_uvb','f_green','s_gfp'),
+ swapped:()=>epi('f_green','d_uvb','f_blue','s_gfp'),
+ bleed:()=>[put('led_blue',5,0,1),put('s_gfp',5,1,1),put('camera',5,3,3)]
+};
+['gfp','mch','dapi'].forEach(k=>{const a=analyze(LAYOUTS[k]());REF[a.dyes[0].key]=a.sigRate?a.sigRate[0]:a.camInfo[0].sig[0]});
+TRREF=analyze(LAYOUTS.bf()).camInfo[0].tr;
+
+return {WL,L0,L1,N,COLS,ROWS,DIRS,DIRNAME,REFL,orient,sum,dot,mx,mul,cent,clamp,sig,specColor,monoColor,toCss,filterT,dichroic,info,PARTS,PID,FLUORS,LAMP,QE,OBJ,TS,lampSpec,trace,analyze,verdict,diagnose,scanWheels,checkTask,LAYOUTS,REF,uid,put,fluorSpecs,BANDS,BORDER,bn,cap,listText,colourOf,dotsOf,lab,get TRREF(){return TRREF}};
+})();
+//==CORE-END
+
+</script>
+<script>
+(function(){
+'use strict';
+const C=CORE,$=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clamp=C.clamp,CELL=72,VW=C.COLS*CELL,VH=C.ROWS*CELL,FW=4000;
+const state={mode:'simple',board:[],sel:null,armed:null,lampOn:false,pred:null,task:null,note:'',done:false,hint:false,log:false,
+ groups:{src:true,filters:true,dich:true,fluor:true,atsample:false,detected:true},hover:null};
+let sim=null,geo=null,ver=null,diag=[],scan=null,predMode='';
+const ESCALE=0.5*FW/(C.REF.gfp*0.1);
+
+const TASKS={
+ gfp:{title:'Image GFP',pid:'s_gfp',mode:'live',text:'These worms have GFP in the pharynx, the feeding organ at the head. Build a microscope that shows a bright, clean green image on the camera. The objective sends the glow back out through the face the light came in.',hint:'The light going to the sample and the glow coming back travel different ways, and something at the junction has to separate them. Which colour excites GFP, and which colour does it emit? Look at the spectra below.',sol:'gfp'},
+ mch:{title:'Image mCherry',pid:'s_mch',mode:'live',text:'These worms have mCherry in the intestine, which glows red. Build a microscope that shows a bright, clean red image.',hint:'Same logic as for GFP, with the colours shifted. Which colours does the lamp have to give up, and which must the camera never see?',sol:'mch'},
+ dapi:{title:'Image DAPI nuclei',pid:'s_dapi',mode:'live',text:'DAPI stains the nuclei: it is excited by UV and glows blue. Build a microscope that shows them. Think about what the dichroic must reflect and what it must pass.',hint:'DAPI takes in UV and gives out blue, the next colour along. The dichroic has to reflect the first and pass the second.',sol:'dapi'},
+ both:{adv:1,title:'Two colours at once: GFP and mCherry',pid:'s_both',mode:'live',text:'GFP marks the pharynx (green) and mCherry the intestine (red). Show both on the same camera at the same time, with one lamp and no swapping of parts.',hint:'Look for parts that deal with two colours at once: one to choose the colours that go to the sample, one to sort the paths, one for the colours that go to the camera.',sol:'both'},
+ dapimch:{adv:1,title:'Two colours at once: DAPI and mCherry',pid:'s_dapimch',mode:'live',text:'Blue nuclei and a red intestine. Show both at once. The two dyes sit at opposite ends of the spectrum, so check which two-colour parts fit.',hint:'Excitation needs UV and orange; the camera needs blue and red. Compare the two-colour parts in the list.',sol:'dapimch'},
+ cams2:{adv:1,title:'Two colours, two cameras',pid:'s_both',mode:'cams2',text:'Record GFP and mCherry at the same time, each on its own camera. You have up to three cameras and some beam splitters. A dichroic sorts light by colour, so it can send each colour to a different camera.',hint:'After the dichroic that separates sample light from lamp light, put a second dichroic that reflects the green but passes the red (or the other way round), with a camera on each branch.',sol:'cams2'},
+ combine:{adv:1,title:'Two LEDs, one beam',pid:'s_both',mode:'live',text:'Light the sample with a blue LED and an orange LED instead of the white lamp, and image GFP and mCherry together. The two LEDs sit in different places, so merge their beams into one path with a light combiner.',hint:'A dichroic works backwards too: it reflects one colour and passes another, so two beams arriving from different sides leave together. The combiner has to reflect one LED\u2019s colour and pass the other\u2019s.',sol:'combine'},
+ dia:{adv:1,title:'Excite from behind the sample',pid:'s_gfp',mode:'dia',text:'Put a lamp on the far side of the sample so its light passes through the worms (transmitted light) and excites GFP from behind. Then no dichroic is needed: only the glow has to reach the camera. Do not use any dichroic.',hint:'The back of the sample is the side opposite the objective lens. LEDs spread a little into neighbouring colours, so clean up the LED light before the sample, and block the excitation colour in front of the camera.',sol:'dia'},
+ bf:{adv:1,title:'Brightfield: see the worms',pid:'s_gfp',mode:'bf',text:'Show the worms in plain transmitted light (brightfield). Put a lamp behind the sample so its light passes through the worms and into the objective, then on to the camera.',hint:'The objective faces the camera path. The lamp goes on the opposite side of the sample, shining toward the objective.',sol:'bf'},
+ bfred:{adv:1,title:'Brightfield in red light',pid:'s_gfp',mode:'bfred',text:'Colour modes for transmitted light come from filters. Show the worms in brightfield, but in red light only.',hint:'Any filter in the path, before the sample or in front of the camera, decides which colours reach the camera.',sol:'bfred'},
+ wheels:{adv:1,title:'Two colours, one after the other',pid:'s_both',mode:'sequence',text:'Image GFP and mCherry separately, switching between them with filter wheels instead of two-colour filters. Each dye needs one wheel setting where its image is bright and clean. Select a wheel on the grid to load filters and choose the active position.',hint:'Both dyes can share one dichroic if it handles both colour pairs. Put the single-colour filters into the wheels so that one position of each wheel suits GFP and another suits mCherry.',sol:'wheels'},
+ seq3:{adv:1,title:'Three dyes, one after the other',pid:'s_all',mode:'sequence',text:'Blue nuclei (DAPI), green pharynx (GFP) and red intestine (mCherry) in one worm. DAPI\u2019s blue glow is the very colour GFP needs reflected, so no single dichroic does all three. Use wheels and a dichroic turret, and find one setting per dye.',hint:'Each dye needs its own excitation filter, its own dichroic and its own emission filter. A turret swaps dichroics; wheels swap filters.',sol:'seq3'}
+};
+const EXAMPLES=[
+ ['gfp','Working: GFP set-up','A working GFP design. Follow the light from the lamp, around the dichroic, down to the sample and back to the camera.'],
+ ['wrongway','Broken: a part turned the wrong way','The GFP parts are all there, but one is turned. Predict what the camera shows.'],
+ ['direct','Broken: camera in the lamp beam','Predict what happens when the camera sits where lamp light can reach it.'],
+ ['noexc','Broken: nothing before the sample','The lamp shines straight at the dichroic. Predict the image.'],
+ ['swapped','Broken: two filters swapped','Same parts, with two filters in each other\u2019s place.'],
+ ['both','Working: two colours at once','Two-colour parts let both dyes be excited and recorded at the same time.',1],
+ ['cams2','Working: two cameras','A second dichroic splits the glow by colour: green to one camera, red to the other.',1],
+ ['combine','Working: two LEDs combined','A dichroic used backwards merges the blue and orange LED beams into one.',1],
+ ['dia','Working: excitation from behind','A blue LED behind the sample excites GFP through the worms. A filter in front of the camera keeps the blue out.',1],
+ ['bf','Working: brightfield','A lamp behind the sample shows the worms in transmitted white light.',1],
+ ['bfred','Working: brightfield in red','The same transmitted light, with a red filter as the colour mode.',1],
+ ['bleed','Broken: LED behind the sample, no filters','Predict what the camera shows when blue light shines through a GFP sample into the camera.',1],
+ ['wheels','Working: filter wheels','The same two dyes, imaged one after the other. Select a wheel to see its positions, then step through them with the lamp on.',1],
+ ['turret','Working: dichroic turret','Single-colour dichroics in a turret, with filter wheels either side. Step through the positions with the lamp on.',1],
+ ['seq3','Working: three dyes in turn','Wheels and a turret give each of the three dyes its own filters and dichroic.',1]
+];
+const PRED=[['dark','A black image: nothing reaches the camera.'],['dim','A clean image, but dim.'],['washed','Lamp light drowns the fluorescence.'],['good','Bright, clean fluorescence.']];
+
+/* ---------- inventory ---------- */
+const def=p=>C.PID[p.pid];
+const used=pid=>state.board.reduce((n,p)=>n+(p.pid===pid?1:0)+(p.slots?p.slots.filter(s=>s===pid).length:0),0);
+const hasSample=()=>state.board.some(p=>def(p).kind==='sample');
+function limitOf(d){return state.mode==='simple'&&d.limitSimple!=null?d.limitSimple:d.limit}
+function available(pid){const d=C.PID[pid];
+ if(d.adv&&state.mode==='simple')return false;
+ if(d.kind==='sample'){if(hasSample())return false;if(state.task&&TASKS[state.task].pid!==pid)return false;return true}
+ return used(pid)<limitOf(d)}
+const cellAt=(c,r)=>state.board.find(p=>p.c===c&&p.r===r);
+const selInst=()=>state.board.find(p=>p.uid===state.sel)||null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),4200)}
+const fmtPct=f=>{const v=f*100;return v>=10?v.toFixed(0)+'%':v>=1?v.toFixed(1)+'%':v>=0.01?v.toFixed(2)+'%':v>0?'<0.01%':'0%'};
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- bin ---------- */
+const colorCache={};
+function partColor(d){
+ if(colorCache[d.id])return colorCache[d.id];let c;
+ if(d.kind==='filter')c=C.BANDS[d.bands[0]].col;
+ else if(d.kind==='dichroic')c=C.BANDS[d.refl[0]].col;
+ else if(d.kind==='wheel'||d.kind==='turret')c='rgb(170,185,198)';
+ else if(d.kind==='sample')c=C.specColor(C.fluorSpecs(C.FLUORS[d.dyes[0]]).em).css;
+ else if(d.kind==='lamp')c=d.col||'rgb(255,233,168)';
+ else if(d.kind==='mirror')c='rgb(215,226,234)';
+ else c='rgb(150,170,185)';
+ return colorCache[d.id]=c;
+}
+const dots=cols=>'<span class="dots">'+cols.map(c=>'<i style="background:'+c+'"></i>').join('')+'</span>';
+function chipHTML(p){
+ if(p.kind==='filter')return '<button type="button" class="chip nosw" data-pid="'+p.id+'">'+dots(C.dotsOf(p))+'<span>'+esc(p.name)+'</span><small></small></button>';
+ if(p.kind==='dichroic'){const R=p.refl.map(k=>C.BANDS[k].col),T=p.pass.map(k=>C.BANDS[k].col);
+  return '<button type="button" class="chip nosw two" data-pid="'+p.id+'"><span class="ln">'+dots(R)+'<span><em>reflects</em> '+esc(p.refl.map(C.bn).join(' + '))+'</span></span><span class="ln">'+dots(T)+'<span><em>passes</em> '+esc(p.pass.map(C.bn).join(' + '))+'</span></span><small></small></button>'}
+ return '<button type="button" class="chip" data-pid="'+p.id+'" style="--sw:'+partColor(p)+'"><span>'+esc(p.name)+'</span><small></small></button>';
+}
+function renderBin(){
+ const groups=[];C.PARTS.forEach(p=>{let g=groups.find(x=>x.name===p.group);if(!g){g={name:p.group,items:[]};groups.push(g)}g.items.push(p)});
+ let h='<h2 class="bin-title">Parts</h2><p class="bin-help">Drag a part onto the grid, or tap it and then tap a cell. Each part is limited, like a real bench.</p>';
+ for(const g of groups){h+='<details class="grp" open><summary>'+esc(g.name)+'</summary><div class="chips">';
+  for(const p of g.items)h+=chipHTML(p);
+  h+='</div></details>'}
+ $('#bin').innerHTML=h;
+ if(matchMedia('(max-width:1040px)').matches)$$('#bin details').forEach((d,i)=>{d.open=i<1});
+}
+function syncBin(){
+ $$('#bin .chip').forEach(ch=>{const p=C.PID[ch.dataset.pid],hide=p.adv&&state.mode==='simple',ok=available(p.id);
+  const left=p.kind==='sample'?(ok?1:0):limitOf(p)-used(p.id);
+  ch.hidden=hide;ch.disabled=!ok;ch.querySelector('small').textContent=p.kind==='sample'?'':'×'+left;
+  ch.classList.toggle('armed',state.armed===p.id)});
+ $$('#bin details').forEach(d=>{d.hidden=!d.querySelector('.chip:not([hidden])')});
+}
+
+/* ---------- board drawing ---------- */
+const OFF=[[0,5],[5,0],[0,-5],[-5,0]];
+const lv=(p,ref)=>clamp(1+Math.log10(p/ref)/6,0,1);
+function beams(){
+ let s='';const E=(state.lampOn&&sim.complete)?sim.edges:geo.edges;const live=state.lampOn&&sim.complete;
+ if(!live&&!(geo.edges.size))return '';
+ const ref=sim.lampP;
+ for(const e of E.values()){
+  const cx=e.c*CELL+CELL/2+OFF[e.d][0],cy=e.r*CELL+CELL/2+OFF[e.d][1],[dx,dy]=C.DIRS[e.d];
+  const x2=cx+dx*CELL,y2=cy+dy*CELL,mx=(cx+x2)/2,my=(cy+y2)/2;
+  if(!live){
+   s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--bench-ink-2)" stroke-width="2" stroke-dasharray="3 6" opacity=".7"/>';
+   s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="var(--bench-ink-2)" opacity=".85"/>';continue}
+  const p=C.sum(e.spec);if(!(p>ref*1e-8))continue;
+  const col=C.specColor(e.spec),l=lv(p,ref),dash=col.invisible?' stroke-dasharray="7 5"':'';
+  s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col.css+'" stroke-width="18" opacity="'+(0.5*l).toFixed(2)+'" filter="url(#glow)"/>';
+  s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col.css+'" stroke-width="6" opacity="'+(0.25+0.75*l).toFixed(2)+'"'+dash+'/>';
+  s+='<polygon points="-5,-5 6,0 -5,5" transform="translate('+mx+','+my+') rotate('+e.d*90+')" fill="#fff" opacity="'+(0.35+0.4*l).toFixed(2)+'"/>';
+ }
+ return s;
+}
+function bandColors(d){return d.bands.map(k=>C.BANDS[k].col)}
+function glyph(p){
+ const d=def(p),cx=p.c*CELL+CELL/2,cy=p.r*CELL+CELL/2,sel=state.sel===p.uid;
+ let g='<g class="part'+(sel?' sel':'')+'" data-uid="'+p.uid+'" transform="translate('+cx+','+cy+')" tabindex="0" role="button" aria-label="'+esc(d.name)+', '+esc(orientText(p))+'">';
+ g+='<rect x="-34" y="-34" width="68" height="68" rx="10" fill="transparent"/><rect class="ring" x="-34" y="-34" width="68" height="68" rx="10"/>';
+ const rot='rotate('+p.rot*90+')';
+ switch(d.kind){
+  case 'lamp':{const on=p.on!==false,col=d.col||'#ffe9a8';g+='<g transform="'+rot+'"><path d="M6 -13 L27 -24 L27 24 L6 13Z" fill="'+col+'" opacity="'+(on?0.32:0.05)+'"/><rect x="-25" y="-17" width="31" height="34" rx="4" fill="#2f3d49" stroke="#5a6f80"/><circle cx="-9" cy="0" r="7" fill="'+(on?col:'#3a4650')+'"/></g>';break}
+  case 'splitter':{const o=C.orient(p.rot)==='/';g+='<line x1="-25" y1="'+(o?25:-25)+'" x2="25" y2="'+(o?-25:25)+'" stroke="#c9d6df" stroke-width="9" opacity=".4" stroke-linecap="round"/><line x1="-25" y1="'+(o?25:-25)+'" x2="25" y2="'+(o?-25:25)+'" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" opacity=".9"/>';break}
+  case 'camera':g+='<g transform="'+rot+'"><rect x="-25" y="-18" width="31" height="36" rx="4" fill="#2f3d49" stroke="#5a6f80"/><path d="M6 -12 L25 -17 L25 17 L6 12Z" fill="#141d25" stroke="#5a6f80"/><circle cx="-10" cy="0" r="5" fill="#0b1015" stroke="#5a6f80"/></g>';break;
+  case 'sample':g+='<g transform="'+rot+'"><rect x="-26" y="-15" width="6" height="30" rx="2" fill="'+partColor(d)+'" opacity=".9"/><path d="M-17 -5 L-17 5 L10 14 L10 -14Z" fill="#2f3d49" stroke="#5a6f80"/><line x1="12" y1="-15" x2="12" y2="15" stroke="#9fb4c3" stroke-width="3"/></g>';break;
+  case 'turret':{const slots=p.slots||[],pos=p.pos||0,fd=C.PID[slots[pos]],o=C.orient(p.rot)==='/';
+   g+='<circle r="27" fill="#1b2832" stroke="#5a6f80"/>';
+   [[0,-21],[21,0],[0,21],[-21,0]].forEach(([x,y],i)=>{const f=C.PID[slots[i]];g+='<circle cx="'+x+'" cy="'+y+'" r="5.5" fill="'+(f?C.BANDS[f.refl[0]].col:'none')+'" stroke="'+(i===pos?'#fff':'#5a6f80')+'" stroke-width="'+(i===pos?2:1)+'"/>'});
+   const x1=-15,y1=o?15:-15,dx=30,dy=o?-30:30;
+   if(fd){const n=fd.refl.length;fd.refl.forEach((k,i)=>{const a=i/n,b=(i+1)/n;g+='<line x1="'+(x1+dx*a)+'" y1="'+(y1+dy*a)+'" x2="'+(x1+dx*b)+'" y2="'+(y1+dy*b)+'" stroke="'+C.BANDS[k].col+'" stroke-width="7" opacity=".95"/>'});g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+(x1+dx)+'" y2="'+(y1+dy)+'" stroke="#fff" stroke-width="1.2" opacity=".8"/>'}
+   else g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+(x1+dx)+'" y2="'+(y1+dy)+'" stroke="#5a6f80" stroke-width="2" stroke-dasharray="3 3"/>';break}
+  case 'wheel':{const slots=p.slots||[],pos=p.pos||0,fd=C.PID[slots[pos]];
+   g+='<circle r="27" fill="#1b2832" stroke="#5a6f80"/>';
+   [[0,-19],[19,0],[0,19],[-19,0]].forEach(([x,y],i)=>{const f=C.PID[slots[i]];g+='<circle cx="'+x+'" cy="'+y+'" r="6" fill="'+(f?C.BANDS[f.bands[0]].col:'none')+'" stroke="'+(i===pos?'#fff':'#5a6f80')+'" stroke-width="'+(i===pos?2:1)+'"/>';if(f&&f.bands.length>1)g+='<circle cx="'+x+'" cy="'+y+'" r="3" fill="'+C.BANDS[f.bands[1]].col+'"/>'});
+   const cols=fd?bandColors(fd):['#2a3a46'],seg=34/cols.length;
+   g+='<g transform="rotate('+(p.rot%2?90:0)+')">';cols.forEach((c,i)=>{g+='<rect x="-3.5" y="'+(-17+i*seg)+'" width="7" height="'+(seg-(cols.length>1?1:0))+'" rx="1.5" fill="'+c+'" stroke="#e8eef2" stroke-opacity=".6"/>'});g+='</g>';break}
+  case 'filter':{const cols=bandColors(d),L=54,seg=L/cols.length;
+   g+='<g transform="rotate('+(p.rot%2?90:0)+')">';cols.forEach((c,i)=>{g+='<rect x="-5" y="'+(-27+i*seg)+'" width="10" height="'+(seg-(cols.length>1?1.5:0))+'" rx="2" fill="'+c+'" stroke="#e8eef2" stroke-opacity=".7"/>'});g+='</g>';break}
+  case 'mirror':{const o=C.orient(p.rot)==='/';g+='<line x1="-25" y1="'+(o?25:-25)+'" x2="25" y2="'+(o?-25:25)+'" stroke="#d7e2ea" stroke-width="5" stroke-linecap="round"/><line x1="'+(-25+4)+'" y1="'+(o?25+4:-25+4)+'" x2="'+(25+4)+'" y2="'+(o?-25+4:25+4)+'" stroke="#5a6f80" stroke-width="2"/>';break}
+  case 'dichroic':{const o=C.orient(p.rot)==='/',cols=d.refl.map(k=>C.BANDS[k].col),n=cols.length;
+   const x1=-25,y1=o?25:-25,dx=50,dy=o?-50:50;
+   cols.forEach((c,i)=>{const a=i/n,b=(i+1)/n;g+='<line x1="'+(x1+dx*a)+'" y1="'+(y1+dy*a)+'" x2="'+(x1+dx*b)+'" y2="'+(y1+dy*b)+'" stroke="'+c+'" stroke-width="9" stroke-linecap="butt" opacity=".9"/>'});
+   g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+(x1+dx)+'" y2="'+(y1+dy)+'" stroke="#fff" stroke-width="1.5" opacity=".8"/>';break}
+ }
+ g+=labelSVG(d,p);
+ if(sel)g+='<g class="rotb" data-rot="'+p.uid+'" transform="translate(27,-27)"><circle r="12"/><text>↻</text></g>';
+ return g+'</g>';
+}
+function dotRow(cols,y,x0){return cols.map((c,i)=>'<circle cx="'+(x0+i*11)+'" cy="'+y+'" r="4.2" fill="'+c+'" stroke="#0a1015" stroke-width="1"/>').join('')}
+function labelSVG(d,p){
+ if(d.kind==='camera'){const n=state.board.filter(x=>def(x).kind==='camera').indexOf(p)+1;return '<text class="plabel" x="0" y="33">Camera '+n+'</text>'}
+ if(d.kind==='lamp'&&p&&p.on===false)return '<text class="plabel" x="0" y="33">'+esc(d.short)+' (off)</text>';
+ if(d.kind==='filter'){const c=C.dotsOf(d);return dotRow(c,34,-(c.length-1)*5.5)}
+ if(d.kind==='dichroic'){const R=d.refl.map(k=>C.BANDS[k].col),T=d.pass.map(k=>C.BANDS[k].col);
+  return '<text class="plabel" x="-31" y="37" style="text-anchor:middle">↩</text>'+dotRow(R,34,-20)+'<text class="plabel" x="-31" y="48" style="text-anchor:middle">→</text>'+dotRow(T,45,-20)}
+ return '<text class="plabel" x="0" y="33">'+esc(d.short)+'</text>';
+}
+function renderBoard(){
+ let cells='';
+ for(let r=0;r<C.ROWS;r++)for(let c=0;c<C.COLS;c++)cells+='<rect class="cell'+(cellAt(c,r)?'':' free')+'" data-c="'+c+'" data-r="'+r+'" x="'+c*CELL+'" y="'+r*CELL+'" width="'+CELL+'" height="'+CELL+'"/>';
+ $('#bench').classList.toggle('armed',!!state.armed);
+ $('#bench').innerHTML='<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter></defs>'+cells+'<g class="beams" style="pointer-events:none">'+beams()+'</g>'+state.board.map(glyph).join('')+'<rect id="hov" class="hov" width="'+CELL+'" height="'+CELL+'" rx="6" visibility="hidden"/>';
+}
+function orientText(p){
+ const d=def(p);
+ if(d.kind==='turret')return 'angled as '+C.orient(p.rot);
+ if(d.kind==='lamp')return 'shines '+C.DIRNAME[p.rot];
+ if(d.kind==='camera'||d.kind==='sample')return 'lens faces '+C.DIRNAME[p.rot];
+ if(d.kind==='filter'||d.kind==='wheel')return 'light passes '+(p.rot%2?'vertically':'horizontally');
+ return 'angled as '+C.orient(p.rot);
+}
+function slotText(sid){const f=C.PID[sid];if(!f)return '<span class="open">open (nothing)</span>';return f.kind==='dichroic'?dots(f.refl.map(k=>C.BANDS[k].col))+'<span>reflects '+esc(f.refl.map(C.bn).join(' + '))+'</span>':dots(C.dotsOf(f))+'<span>'+esc(f.name)+'</span>'}
+function renderSel(){
+ const p=selInst(),box=$('#selinfo');
+ ['#btnRotL','#btnRotR','#btnRemove'].forEach(s=>$(s).disabled=!p);
+ if(!p){box.textContent='Select a part on the grid to turn, move or remove it. With a part selected, click any empty cell to move it there.';return}
+ const d=def(p);let h='<b>'+esc(d.name)+'</b>: '+esc(orientText(p))+'. '+esc(C.info(d))+' <i class="mv">To move it, click an empty cell (or drag it). Esc deselects.</i>';
+ if(d.kind==='lamp')h+='<div class="lampctl"><button type="button" class="btn" id="btnLampSel">'+(p.on!==false?'Switch this lamp off':'Switch this lamp on')+'</button></div>';
+ if(d.kind==='wheel'||d.kind==='turret'){const what=d.kind==='wheel'?'filter':'dichroic';h+='<div class="wheelp" id="wheelp"><p class="wh">Choose the position that sits in the beam. To load a '+what+', tap it in the parts list and then tap a position, or drag it there.</p>';
+  for(let i=0;i<4;i++){const act=(p.pos||0)===i;h+='<div class="wslot'+(act?' act':'')+'" data-i="'+i+'" tabindex="0" role="button" aria-pressed="'+act+'" aria-label="Position '+(i+1)+(act?', in the beam':'')+'"><b>'+(i+1)+'</b>'+slotText((p.slots||[])[i])+(act?'<em>in beam</em>':'')+'<button type="button" class="wx" data-clr="'+i+'" aria-label="Empty position '+(i+1)+'"'+((p.slots||[])[i]?'':' hidden')+'>×</button></div>'}
+  h+='</div>'}
+ box.innerHTML=h;
+}
+const holds=k=>k==='wheel'?'filter':k==='turret'?'dichroic':null;
+function loadWheel(i,pid){
+ const p=selInst();if(!p||!holds(def(p).kind))return;
+ const f=C.PID[pid],need=holds(def(p).kind);if(!f||f.kind!==need){toast(need==='filter'?'Only filters fit in a wheel.':'Only dichroics fit in a turret.');return}
+ if(!available(pid)){toast('No more of that filter are left.');return}
+ p.slots=p.slots||[null,null,null,null];p.slots[i]=pid;p.pos=i;state.armed=null;syncArm();update(p.uid);
+}
+$('#selinfo').addEventListener('click',e=>{
+ const p0=selInst();if(p0&&e.target.id==='btnLampSel'){p0.on=p0.on===false;update(p0.uid);return}
+ const p=selInst();if(!p||!holds(def(p).kind))return;
+ const x=e.target.closest('.wx');if(x){e.stopPropagation();p.slots[+x.dataset.clr]=null;update(p.uid);return}
+ const w=e.target.closest('.wslot');if(!w)return;const i=+w.dataset.i;
+ if(state.armed){loadWheel(i,state.armed);return}
+ p.pos=i;update(p.uid);
+});
+
+/* ---------- editing ---------- */
+function add(pid,c,r){
+ if(cellAt(c,r)){toast('That cell is taken. Drop the part on an empty cell.');return false}
+ if(!available(pid)){toast(C.PID[pid].kind==='sample'?'Only one sample fits on the stage.':'No more of that part are left. Remove one from the grid first.');return false}
+ const p=C.put(pid,c,r,0);if(C.PID[pid].kind==='lamp')p.on=true;if(holds(C.PID[pid].kind)){p.slots=[null,null,null,null];p.pos=0}state.board.push(p);state.sel=p.uid;state.armed=null;update();return true;
+}
+function moveTo(uid,c,r){
+ const p=state.board.find(x=>x.uid===uid);if(!p)return;const o=cellAt(c,r);
+ if(o&&o!==p){o.c=p.c;o.r=p.r}p.c=c;p.r=r;state.sel=uid;update();
+}
+function rotate(dir){const p=selInst();if(!p)return;p.rot=(p.rot+dir+4)%4;update(p.uid)}
+function removeSel(){const p=selInst();if(!p)return;state.board=state.board.filter(x=>x!==p);state.sel=null;update()}
+$('#btnRotR').addEventListener('click',()=>rotate(1));$('#btnRotL').addEventListener('click',()=>rotate(-1));$('#btnRemove').addEventListener('click',removeSel);
+
+let drag=null,justDragged=false;
+const bench=$('#bench');
+function boardCell(x,y){const r=bench.getBoundingClientRect(),bx=(x-r.left)/r.width*VW,by=(y-r.top)/r.height*VH;const c=Math.floor(bx/CELL),rr=Math.floor(by/CELL);return c>=0&&rr>=0&&c<C.COLS&&rr<C.ROWS?[c,rr]:null}
+function startDrag(e,payload,label,color){
+ if(e.button!==undefined&&e.button!==0)return;
+ drag={payload,label,color,sx:e.clientX,sy:e.clientY,active:false,ghost:null};
+ window.addEventListener('pointermove',onMove);window.addEventListener('pointerup',onUp);window.addEventListener('pointercancel',onCancel);
+}
+function onMove(e){
+ if(!drag)return;
+ if(!drag.active){if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<6)return;drag.active=true;
+  const g=document.createElement('div');g.className='chip ghost';g.style.setProperty('--sw',drag.color);g.textContent=drag.label;document.body.appendChild(g);drag.ghost=g;document.body.classList.add('dragging')}
+ drag.ghost.style.transform='translate('+(e.clientX+10)+'px,'+(e.clientY+10)+'px)';
+ const h=$('#hov'),cell=boardCell(e.clientX,e.clientY);
+ if(h){if(cell){h.setAttribute('x',cell[0]*CELL);h.setAttribute('y',cell[1]*CELL);h.setAttribute('visibility','visible')}else h.setAttribute('visibility','hidden')}
+}
+function endDrag(){window.removeEventListener('pointermove',onMove);window.removeEventListener('pointerup',onUp);window.removeEventListener('pointercancel',onCancel);
+ if(drag&&drag.ghost)drag.ghost.remove();document.body.classList.remove('dragging');const h=$('#hov');if(h)h.setAttribute('visibility','hidden')}
+function onUp(e){
+ const d=drag;endDrag();drag=null;if(!d||!d.active)return;
+ justDragged=true;setTimeout(()=>justDragged=false,0);
+ const cell=boardCell(e.clientX,e.clientY);
+ const under=document.elementFromPoint(e.clientX,e.clientY),ws=under&&under.closest?under.closest('.wslot'):null;
+ if(ws&&d.payload.pid){loadWheel(+ws.dataset.i,d.payload.pid);return}
+ if(cell){if(d.payload.pid)add(d.payload.pid,cell[0],cell[1]);else moveTo(d.payload.uid,cell[0],cell[1])}
+ else if(d.payload.uid){const b=document.elementFromPoint(e.clientX,e.clientY);if(b&&b.closest('#bin')){state.sel=d.payload.uid;removeSel()}}
+}
+function onCancel(){endDrag();drag=null}
+
+$('#bin').addEventListener('pointerdown',e=>{const ch=e.target.closest('.chip');if(!ch||ch.disabled||e.pointerType==='touch')return;const d=C.PID[ch.dataset.pid];startDrag(e,{pid:d.id},d.name,partColor(d))});
+$('#bin').addEventListener('click',e=>{const ch=e.target.closest('.chip');if(!ch||ch.disabled||justDragged)return;
+ state.armed=state.armed===ch.dataset.pid?null:ch.dataset.pid;syncArm()});
+function syncArm(){const a=state.armed,bar=$('#armbar');
+ if(a){bar.hidden=false;bar.innerHTML='<span>Placing '+esc(C.PID[a].name)+': tap an empty cell.</span><button type="button" id="armCancel">Cancel</button>'}else bar.hidden=true;
+ bench.classList.toggle('armed',!!a);syncBin()}
+$('#armbar').addEventListener('click',e=>{if(e.target.id==='armCancel'){state.armed=null;syncArm()}});
+bench.addEventListener('pointerdown',e=>{
+ const rb=e.target.closest('.rotb');if(rb){e.preventDefault();e.stopPropagation();state.sel=rb.dataset.rot;rotate(1);return}
+ const g=e.target.closest('.part');if(!g)return;const p=state.board.find(x=>x.uid===g.dataset.uid);
+ if(p)startDrag(e,{uid:p.uid},def(p).name,partColor(def(p)));
+});
+bench.addEventListener('click',e=>{
+ if(justDragged||e.target.closest('.rotb'))return;
+ const g=e.target.closest('.part');
+ if(g){state.sel=g.dataset.uid;if(state.armed){state.armed=null;syncArm()}renderBoard();renderSel();drawSpectra();return}
+ const cl=e.target.closest('.cell');if(!cl)return;
+ const c=+cl.dataset.c,r=+cl.dataset.r;
+ if(state.armed){add(state.armed,c,r);return}
+ if(state.sel&&selInst()){moveTo(state.sel,c,r);return}
+});
+bench.addEventListener('pointermove',e=>{
+ if(drag||!selInst()||state.armed)return;
+ const h=$('#hov'),cell=boardCell(e.clientX,e.clientY);
+ if(!h)return;
+ if(cell&&!cellAt(cell[0],cell[1])){h.setAttribute('x',cell[0]*CELL);h.setAttribute('y',cell[1]*CELL);h.setAttribute('visibility','visible')}else h.setAttribute('visibility','hidden')});
+bench.addEventListener('pointerleave',()=>{const h=$('#hov');if(h&&!drag)h.setAttribute('visibility','hidden')});
+document.addEventListener('keydown',e=>{
+ const t=e.target.tagName;if(t==='TEXTAREA'||t==='SELECT'||t==='INPUT')return;
+ if(e.key==='Escape'){if(state.armed){state.armed=null;syncArm()}else if(state.sel){state.sel=null;update()}return}
+ const p=selInst();if(!p)return;
+ if(e.key==='r'||e.key==='R'){e.preventDefault();rotate(e.shiftKey?-1:1)}
+ else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSel()}
+ else if(e.key.startsWith('Arrow')){const dd={ArrowRight:[1,0],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowUp:[0,-1]}[e.key],c=p.c+dd[0],r=p.r+dd[1];
+  if(c>=0&&r>=0&&c<C.COLS&&r<C.ROWS&&!cellAt(c,r)){e.preventDefault();p.c=c;p.r=r;update(p.uid)}}
+});
+
+/* ---------- prediction & results ---------- */
+function renderPred(){
+ const two=sim&&sim.sample?sim.sample.dyes.length>1:(state.task?C.PID[TASKS[state.task].pid].dyes.length>1:false);
+ const mode=(two?'2':'1')+state.mode;if(mode===predMode)return;predMode=mode;
+ const list=PRED.slice();if(two)list.splice(2,0,['partial','Only some of the colours show up.']);
+ if(state.mode==='adv')list.push(['bf','A brightfield picture of the worms (transmitted light).']);
+ if(!list.some(x=>x[0]===state.pred))state.pred=null;
+ $('#predBox').innerHTML='<legend>What will the camera show?</legend>'+list.map(p=>'<label class="opt"><input type="radio" name="pred" value="'+p[0]+'"'+(state.pred===p[0]?' checked':'')+'><span>'+esc(p[1])+'</span></label>').join('');
+}
+$('#predBox').addEventListener('change',e=>{if(e.target.name==='pred'){state.pred=e.target.value;renderResults()}});
+$('#btnLamp').addEventListener('click',()=>{state.lampOn=!state.lampOn;update()});
+const mapVer=k=>k==='bgonly'?'washed':k==='bfdim'?'bf':k;
+const VT={
+ dark:['bad','Black image','No fluorescence reaches the camera.'],
+ bgonly:['bad','Only lamp light reaches the camera','There is no fluorescence image.'],
+ washed:['bad','Fluorescence drowned by lamp light','The signal is less than three times the background.'],
+ partial:['warn','Only some colours show up','At least one dye is too weak or too swamped to see on its own camera.'],
+ dim:['warn','Clean but dim','Good contrast, little light. A longer exposure would help.'],
+ good:['good','Bright, clean fluorescence','Signal stands well above the background.'],
+ bf:['good','Brightfield image','Transmitted light passes through the worms and reaches the camera.'],
+ bfdim:['warn','Faint brightfield image','Some transmitted light reaches the camera, but little.']
+};
+function posText(pos){const wh=scan.wh;return pos.map((q,k)=>{const f=C.PID[(wh[k].slots||[])[q]];return (def(wh[k]).kind==='turret'?'turret at column ':'wheel at column ')+(wh[k].c+1)+', row '+(wh[k].r+1)+', position '+(q+1)+' ('+(f?(f.kind==='dichroic'?'reflects '+f.refl.map(C.bn).join(' + '):f.name):'open')+')'}).join('; ')}
+function renderResults(){
+ const box=$('#result');$('#btnLamp').textContent=state.lampOn?'Switch lamps off':'Switch lamps on';$('#btnLamp').classList.toggle('primary',!state.lampOn);
+ if(!state.lampOn){box.innerHTML='<p class="note" style="margin-top:12px">The lamps are off and the dotted lines show only where light could travel. Choose a prediction, then switch the lamps on.</p>';return}
+ if(!sim.complete){box.innerHTML='<div class="verdict"><h3>The bench is not complete</h3><p>Add '+sim.missing.join(', ')+'.</p></div>';return}
+ if(sim.allOff){box.innerHTML='<div class="verdict"><h3>All lamps are off</h3><p>Select a lamp on the grid and switch it on.</p></div>';return}
+ const [tone,title,txt]=VT[ver.key];let h='<div class="verdict '+tone+'"><h3>'+title+'</h3><p>'+(ver.key==='partial'?esc(sim.dyes.filter((f,i)=>!sim.dyeClean[i]).map(f=>f.label).join(' and '))+' is not yet clean on any camera.':txt)+'</p></div>';
+ const mv=mapVer(ver.key);
+ if(state.pred){const p=(document.querySelector('input[name=pred][value="'+state.pred+'"]')||{}).nextElementSibling;
+  h+=state.pred===mv?'<p class="predcheck ok">Your prediction matched.</p>':'<p class="predcheck no">You predicted: '+esc(p?p.textContent.toLowerCase().replace(/\.$/,''):state.pred)+'. The bench disagrees.</p>'}
+ else h+='<p class="note" style="margin-top:8px">Pick a prediction next time to get a match check.</p>';
+ const m=(l,v,f)=>'<div class="meter"><div class="top2"><span>'+l+'</span><b>'+v+'</b></div><div class="bar"><i style="width:'+clamp(f*100,0,100).toFixed(1)+'%"></i></div></div>';
+ h+='<div class="meters">'+m('Lamp light reaching the sample',fmtPct(sim.exFrac),Math.min(1,sim.exFrac/0.3));
+ sim.dyes.forEach((f,i)=>{h+=m(esc(f.label)+' signal (a tuned set-up = 100%)',Math.round(sim.rel[i]*100)+'%',Math.min(1,sim.rel[i]))});
+ const trBest=Math.max(...sim.camInfo.map(c=>c.trRel));if(trBest>0.005)h+=m('Brightfield light (white lamp, no filters = 100%)',Math.round(trBest*100)+'%',Math.min(1,trBest));
+ h+=m('Signal compared with background',sim.sb>=100?'over 100 : 1':sim.sb.toFixed(1)+' : 1',clamp(Math.log10(Math.max(sim.sb,1))/2,0,1))+'</div>';
+ if(scan&&scan.complete){h+='<div class="why"><h3>Stepping through the wheels and turrets</h3><ul>'+scan.dyes.map((f,i)=>{const c=scan.combos.filter(x=>x.clean[i]);return '<li><b>'+esc(f.label)+': '+(c.length?'clean at '+esc(posText(c[0].pos)):'no clean setting yet')+'</b></li>'}).join('')+'</ul></div>'}
+ if(diag.length)h+='<div class="why"><h3>What limits this image</h3><ul>'+diag.map(d=>'<li><b>'+esc(d.title)+'</b><span>'+esc(d.body)+'</span></li>').join('')+'</ul></div>';
+ else if(ver.key==='good')h+='<div class="why"><h3>Why it works</h3><p class="note">The excitation takes one path to the sample and the fluorescence takes another to the camera, and the part at the junction sends each the right way.</p></div>';
+ box.innerHTML=h;
+}
+
+function buildScene(mkCanvas,SW,SH){
+ const names=['body','pha','gut','nuc','lum','gran','out'],cx={};
+ names.forEach(n=>{const c=mkCanvas(SW,SH),g=c.getContext('2d');g.fillStyle='#000';g.fillRect(0,0,SW,SH);cx[n]=g});
+ let seed=11;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+ const S=SW/360;
+ const blob=(g,x,y,r,a)=>{const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(255,255,255,'+a+')');gr.addColorStop(0.55,'rgba(255,255,255,'+(a*0.75)+')');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(x-r,y-r,2*r,2*r)};
+ const ell=(g,x,y,major,minor,ang,a)=>{g.save();g.translate(x,y);g.rotate(ang);g.scale(1,minor/major);blob(g,0,0,major,a);g.restore()};
+ const worms=[
+  {x0:12,y0:78,len:318,ang:0.10,amp:30,k:1.2,ph:0.6,W:27,eggs:3},
+  {x0:354,y0:228,len:268,ang:Math.PI+0.08,amp:23,k:1.1,ph:2.4,W:23,eggs:2},
+  {x0:130,y0:158,len:118,ang:-0.62,amp:9,k:1.7,ph:1.2,W:12,eggs:0}
+ ];
+ for(const w of worms){
+  const L=w.len*S,W=w.W*S,A=w.amp*S,x0=w.x0*S,y0=w.y0*S,a=w.ang;
+  const pt=t=>{const o=A*Math.sin(2*Math.PI*w.k*t+w.ph);return [x0+t*L*Math.cos(a)-o*Math.sin(a),y0+t*L*Math.sin(a)+o*Math.cos(a)]};
+  const nrm=t=>{const p=pt(Math.max(0,t-0.002)),q=pt(Math.min(1,t+0.002));let dx=q[0]-p[0],dy=q[1]-p[1];const m=Math.hypot(dx,dy)||1;return [-dy/m,dx/m,dx/m,dy/m]};
+  const prof=t=>{const head=0.5+0.5*Math.sin(Math.min(1,t/0.13)*Math.PI/2);const tail=t<0.8?1:Math.pow(Math.max(0,1-(t-0.8)/0.2),0.75);return head*tail};
+  const step=1/(L*1.4);
+  // body silhouette + cuticle outline
+  const left=[],right=[];
+  for(let t=0;t<=1.0001;t+=step){const p=pt(t),n=nrm(t),h=W*prof(t)/2;left.push([p[0]+n[0]*h,p[1]+n[1]*h]);right.push([p[0]-n[0]*h,p[1]-n[1]*h])}
+  const poly=g=>{g.beginPath();left.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));for(let i=right.length-1;i>=0;i--)g.lineTo(right[i][0],right[i][1]);g.closePath()};
+  const gb=cx.body;gb.globalCompositeOperation='source-over';gb.shadowColor='#fff';gb.shadowBlur=2*S;gb.fillStyle='#fff';poly(gb);gb.fill();gb.shadowBlur=0;
+  const go=cx.out;go.globalCompositeOperation='lighter';go.strokeStyle='rgba(255,255,255,0.8)';go.lineWidth=1.5*S;poly(go);go.stroke();
+  for(const g of [cx.pha,cx.gut,cx.nuc,cx.lum,cx.gran])g.globalCompositeOperation='lighter';
+  // pharynx: metacorpus, isthmus, terminal bulb
+  for(let t=0.03;t<=0.215;t+=step*0.8){const p=pt(t);let r;
+   if(t<0.1)r=0.34*W*prof(t)*(0.8+0.2*Math.sin((t-0.03)/0.07*Math.PI));
+   else if(t<0.14)r=0.10*W;
+   else r=0.37*W*Math.sin(Math.min(1,(t-0.135)/0.08)*Math.PI*0.9+0.15);
+   blob(cx.pha,p[0],p[1],Math.max(1.2*S,r),0.5)}
+  // intestine
+  const g0=0.215,g1=0.965;
+  for(let t=g0;t<=g1;t+=step*0.8){const p=pt(t),taper=t>0.9?Math.max(0.3,1-(t-0.9)/0.07):1,r=0.29*W*prof(t)*taper;blob(cx.gut,p[0],p[1],Math.max(1.5*S,r*1.1),0.5)}
+  cx.lum.strokeStyle='rgba(255,255,255,0.8)';cx.lum.lineWidth=1.5*S;cx.lum.globalCompositeOperation='lighter';cx.lum.beginPath();
+  for(let t=g0+0.01;t<=g1-0.01;t+=step*3){const p=pt(t);t<=g0+0.011?cx.lum.moveTo(p[0],p[1]):cx.lum.lineTo(p[0],p[1])}cx.lum.stroke();
+  for(let k=0;k<Math.round(L*2.2);k++){const t=g0+(g1-g0)*rnd(),p=pt(t),n=nrm(t),h=0.26*W*prof(t)*(rnd()*2-1);blob(cx.gran,p[0]+n[0]*h,p[1]+n[1]*h,(0.9+rnd()*1.1)*S,0.9)}
+  // nuclei
+  const nuc=(t,side,r,a)=>{const p=pt(t),n=nrm(t),o=side*W*prof(t);ell(cx.nuc,p[0]+n[0]*o,p[1]+n[1]*o,r*S,r*0.7*S,Math.atan2(n[3],n[2]),a)};
+  for(let k=0;k<20;k++){const t=0.235+0.7*k/19+(rnd()-0.5)*0.01;nuc(t,(k%2?1:-1)*0.14*prof(t),3.2,0.95)}
+  for(let k=0;k<22;k++){const t=0.1+0.82*rnd();nuc(t,(rnd()<0.5?1:-1)*0.40*prof(t),2.1,0.85)}
+  if(w.len>200){for(let k=0;k<70;k++){const t=0.36+0.34*rnd();nuc(t,(rnd()<0.5?1:-1)*(0.2+0.12*rnd())*prof(t),1.5,0.8)}}
+  for(let k=0;k<10;k++){const t=0.04+0.16*rnd();nuc(t,(rnd()-0.5)*0.3,1.7,0.85)}
+  for(let k=0;k<14;k++){const t=0.07+0.06*rnd();nuc(t,(rnd()<0.5?1:-1)*0.38*prof(t),1.6,0.8)}
+  // embryos
+  for(let k=0;k<w.eggs;k++){const t=0.50+0.07*k,p=pt(t),n=nrm(t),o=(k%2?1:-1)*0.16*W,ex=p[0]+n[0]*o,ey=p[1]+n[1]*o,ang=Math.atan2(n[3],n[2]);
+   go.save();go.translate(ex,ey);go.rotate(ang);go.strokeStyle='rgba(255,255,255,0.8)';go.lineWidth=1.2*S;go.beginPath();go.ellipse(0,0,6.5*S,4.2*S,0,0,Math.PI*2);go.stroke();go.restore();
+   for(let j=0;j<8;j++)blob(cx.nuc,ex+(rnd()-0.5)*8*S,ey+(rnd()-0.5)*5*S,1.1*S,0.75)}
+ }
+ const M={SW,SH};
+ for(const n of names){const d=cx[n].getImageData(0,0,SW,SH).data,a=new Float32Array(SW*SH);for(let i=0;i<a.length;i++)a[i]=d[i*4]/255;M[n]=a}
+ // derived channels
+ const n=SW*SH;M.F_nuc=M.nuc;M.F_pha=new Float32Array(n);M.F_gut=new Float32Array(n);M.T=new Float32Array(n);
+ for(let i=0;i<n;i++){
+  M.F_pha[i]=Math.min(1,M.pha[i])*(0.78+0.22*M.gran[i]);
+  M.F_gut[i]=Math.min(1,Math.min(1,M.gut[i])*(0.40+0.60*Math.min(1,M.gran[i]*1.4))*(1-0.7*M.lum[i])*1.25);
+  M.T[i]=Math.max(0.12,1-0.26*M.body[i]-0.14*M.gut[i]-0.10*M.pha[i]-0.40*M.gran[i]-0.30*M.lum[i]-0.5*M.out[i]);
+ }
+ return M;
+}
+
+
+/* ---------- cameras ---------- */
+const SW=400,SH=300;
+const SCENE=buildScene((w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c},SW,SH);
+const NOISE=(()=>{const a=new Float32Array(65536);for(let i=0;i<a.length;i++){let u=0;while(u===0)u=Math.random();const v=Math.random();a[i]=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}return a})();
+const VIG=(()=>{const a=new Float32Array(SW*SH);for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){const dx=(x-SW/2)/(SW/2),dy=(y-SH/2)/(SH/2);a[y*SW+x]=1-0.16*(dx*dx+dy*dy)/2}return a})();
+const camBlocks=[];
+function ensureCams(n){
+ const box=$('#cams');
+ while(camBlocks.length<n){const fig=document.createElement('figure');fig.className='camblock';fig.innerHTML='<div class="view"><canvas width="'+SW+'" height="'+SH+'"></canvas><div class="viewtag"></div></div><div class="camstat"></div>';box.appendChild(fig);const cv=fig.querySelector('canvas'),ctx=cv.getContext('2d');camBlocks.push({fig,cv,ctx,img:ctx.createImageData(SW,SH),tag:fig.querySelector('.viewtag'),stat:fig.querySelector('.camstat')})}
+ while(camBlocks.length>n)camBlocks.pop().fig.remove();
+}
+function blank(b,msg){b.ctx.fillStyle='#000';b.ctx.fillRect(0,0,SW,SH);b.ctx.fillStyle='#7d8b96';b.ctx.font='14px sans-serif';b.ctx.textAlign='center';b.ctx.fillText(msg,SW/2,SH/2);b.tag.textContent='';b.stat.textContent=''}
+function drawCams(){
+ const have=sim&&sim.cams?sim.cams.length:0;ensureCams(Math.max(1,have));
+ camBlocks.forEach((b,i)=>drawCam(b,i,have));
+}
+const ZERO=new Float64Array(C.N);
+function drawCam(b,i,have){
+ if(!have){blank(b,'No camera on the bench');return}
+ if(!state.lampOn){blank(b,'Lamps off');if(have>1)b.tag.textContent='Camera '+(i+1);return}
+ if(!sim.complete){blank(b,'Bench incomplete');return}
+ if(sim.allOff){blank(b,'All lamps are off');return}
+ const ci=sim.camInfo[i],dyes=sim.dyes;
+ const mask=dyes.map(f=>f.mask==='nuc'?SCENE.F_nuc:f.mask==='pha'?SCENE.F_pha:SCENE.F_gut);
+ const colOf=a=>{const c=C.specColor(a||ZERO);return c.empty?[0,0,0]:(c.invisible?[0.75,0.75,0.75]:c.rgb)};
+ const colS=dyes.map((f,k)=>colOf(ci.cam['fl'+k]));
+ const hz=new Float64Array(C.N);for(const k of ['ex','bg'])if(ci.cam[k])for(let j=0;j<C.N;j++)hz[j]+=ci.cam[k][j];
+ const colH=colOf(hz),colT=colOf(ci.cam.tr);
+ const hazeRate=ci.ex+ci.bgs,peak=Math.max(Math.max(0,...ci.sig)+hazeRate+ci.tr,1e-12)*ESCALE;
+ const t=clamp(0.6*FW/peak,1e-6,1.0);
+ const sg=ci.sig.map(r=>r*ESCALE*t),hE=hazeRate*ESCALE*t,tE=ci.tr*ESCALE*t;
+ const d=b.img.data,o1=(Math.random()*65536)|0,o2=(Math.random()*65536)|0,body=SCENE.body,T=SCENE.T;
+ for(let p=0,q=0;p<SW*SH;p++,q+=4){
+  const v=VIG[p];let r=0,g=0,bl=0,N=0;
+  for(let k=0;k<dyes.length;k++){const n=sg[k]*mask[k][p]*v;N+=n;r+=n*colS[k][0];g+=n*colS[k][1];bl+=n*colS[k][2]}
+  const nh=hE*(0.55+0.45*Math.min(1,body[p]*1.2))*v;N+=nh;r+=nh*colH[0];g+=nh*colH[1];bl+=nh*colH[2];
+  const nt=tE*T[p]*v;N+=nt;r+=nt*colT[0];g+=nt*colT[1];bl+=nt*colT[2];
+  const z1=NOISE[(p+o1)&65535],z2=NOISE[(p*7+o2)&65535],nn=Math.max(0,N+z1*Math.sqrt(N+0.5)+z2*1.6),k=N>1e-9?nn/N:0;
+  if(N<=1e-9){const w=255*Math.sqrt(clamp(Math.max(0,z2*1.6)/FW,0,1));d[q]=d[q+1]=d[q+2]=w}
+  else{d[q]=255*Math.sqrt(clamp(r*k/FW,0,1));d[q+1]=255*Math.sqrt(clamp(g*k/FW,0,1));d[q+2]=255*Math.sqrt(clamp(bl*k/FW,0,1))}
+  d[q+3]=255;
+ }
+ b.ctx.putImageData(b.img,0,0);
+ b.ctx.fillStyle='#fff';b.ctx.fillRect(14,SH-20,35,3);b.ctx.font='11px sans-serif';b.ctx.textAlign='left';b.ctx.fillText('100 \u00b5m',14,SH-26);
+ b.tag.textContent=(have>1?'Camera '+(i+1)+' (column '+(ci.inst.c+1)+', row '+(ci.inst.r+1)+') · ':'')+'exposure '+(t<0.001?Math.max(1,Math.round(t*1e6))+' \u00b5s':t<0.01?(t*1000).toFixed(1)+' ms':Math.round(t*1000)+' ms')+', automatic';
+ const bfDom=ci.trRel>=0.02&&ci.bfShare>=0.6;
+ const parts=dyes.map((f,k)=>ci.clean[k]?f.label+' clean':(ci.rel[k]>=0.03&&!bfDom)?f.label+' weak or swamped':null).filter(Boolean);
+ if(ci.trRel>=0.02&&ci.bfShare>=0.3)parts.push('brightfield');
+ b.stat.textContent=parts.length?'Records: '+parts.join(', '):'Records nothing useful';
+}
+setInterval(()=>{if(state.lampOn&&sim&&sim.complete&&!sim.allOff)drawCams()},180);
+
+/* ---------- spectra ---------- */
+const GROUPS=[['src','Lamp'],['filters','Filters'],['dich','Dichroics'],['fluor','Dyes'],['atsample','Light reaching the sample'],['detected','Light reaching the camera']];
+function renderGroups(){$('#groups').innerHTML=GROUPS.map(([k,l])=>'<button type="button" class="gbtn" data-g="'+k+'" aria-pressed="'+(state.groups[k]?'true':'false')+'">'+l+'</button>').join('')}
+function syncGroups(){$$('.gbtn').forEach(b=>{const k=b.dataset.g,lock=(k==='atsample'||k==='detected')&&!(state.lampOn&&sim&&sim.complete);b.disabled=lock;b.title=lock?'Switch the lamp on with a complete bench to show this':'';b.setAttribute('aria-pressed',state.groups[k]&&!lock?'true':'false')})}
+$('#groups').addEventListener('click',e=>{const b=e.target.closest('.gbtn');if(!b||b.disabled)return;state.groups[b.dataset.g]=!state.groups[b.dataset.g];syncGroups();drawSpectra()});
+$('#logToggle').addEventListener('change',e=>{state.log=e.target.checked;drawSpectra()});
+function plotDyes(){if(sim&&sim.sample)return sim.sample.dyes.map(k=>C.FLUORS[k]);if(state.task)return C.PID[TASKS[state.task].pid].dyes.map(k=>C.FLUORS[k]);return[]}
+function curves(){
+ const out=[],live=state.lampOn&&sim.complete,sel=selInst(),nrm=a=>{const m=C.mx(a);return a.map(v=>v/m)};
+ const lampArr=(()=>{const ls=state.board.filter(p=>def(p).kind==='lamp'&&p.on!==false);if(!ls.length)return null;const a=new Float64Array(C.N);for(const l of ls){const s=C.lampSpec(def(l));for(let i=0;i<C.N;i++)a[i]+=s[i]}return a})();
+ if(state.groups.src&&lampArr)out.push({fill:true,a:nrm(lampArr),color:'rgb(150,150,150)',alpha:.22,hov:'Lamp'});
+ if(state.groups.fluor)for(const f of plotDyes()){const sp=C.fluorSpecs(f);
+  out.push({fill:true,line:true,a:sp.ex,color:C.monoColor(clamp(f.ex,400,650)),alpha:.28,w:1.5,label:f.label+' absorbs',hov:f.label+' absorbs'});
+  out.push({fill:true,line:true,a:sp.emPk,color:C.specColor(sp.em).css,alpha:.3,w:1.5,label:f.label+' emits',hov:f.label+' emits'})}
+ if(live&&!sim.allOff&&state.groups.atsample&&lampArr){const m=C.mx(lampArr);out.push({fill:true,a:Array.from(sim.Es,v=>v/m),color:cssVar('--accent'),alpha:.4,hov:'Light at sample'})}
+ if(live&&!sim.allOff&&state.groups.detected){const ci=sim.camInfo.slice().sort((x,y)=>(y.sigTot+y.tr)-(x.sigTot+x.tr))[0],Z0=new Float64Array(C.N);
+  const bg=new Float64Array(C.N);for(const k of ['bg','ex'])if(ci.cam[k])for(let i=0;i<C.N;i++)bg[i]+=ci.cam[k][i];
+  const b=C.mul(bg,C.QE),tr=C.mul(ci.cam.tr||Z0,C.QE),ss=sim.dyes.map((f,k)=>C.mul(ci.cam['fl'+k]||Z0,C.QE));let m=Math.max(C.mx(b),C.mx(tr));ss.forEach(s=>{m=Math.max(m,C.mx(s))});
+  const nm=sim.camInfo.length>1?'Camera '+(ci.idx+1):'the camera';
+  if(m>0){out.push({fill:true,a:Array.from(b,v=>v/m),color:cssVar('--bad'),alpha:.45,hov:'Background at '+nm});
+   if(C.mx(tr)>0)out.push({fill:true,a:Array.from(tr,v=>v/m),color:cssVar('--accent'),alpha:.4,hov:'Transmitted light at '+nm});
+   ss.forEach((s,k)=>out.push({fill:true,a:Array.from(s,v=>v/m),color:cssVar('--good'),alpha:.5,hov:sim.dyes[k].label+' at '+nm}))}}
+ const seen=new Set();
+ for(const p of state.board){const d=def(p);if(d.kind!=='wheel'&&d.kind!=='turret'){if(seen.has(d.id))continue;seen.add(d.id)}const isSel=sel&&sel.pid===d.id;
+  const fl=d.kind==='filter'?[d]:d.kind==='wheel'?(p.slots||[]).filter(Boolean).map(s=>C.PID[s]):[];
+  for(const f of fl){if(seen.has('f'+f.id))continue;seen.add('f'+f.id);if(state.groups.filters)out.push({a:C.filterT(f),color:C.BANDS[f.bands[0]].col,w:isSel?3.6:2,label:f.name,hov:f.name+' filter'})}
+  const dl=d.kind==='dichroic'?[d]:d.kind==='turret'?(p.slots||[]).filter(Boolean).map(s=>C.PID[s]):[];
+  for(const dd of dl){if(seen.has('d'+dd.id))continue;seen.add('d'+dd.id);if(!state.groups.dich)continue;const x=C.dichroic(dd),nm='Dichroic ('+dd.refl.map(C.bn).join('+')+')';out.push({a:x.T,color:cssVar('--plot-ink'),w:isSel?3.6:2.2,label:nm+' passes',hov:nm+' passes'});out.push({a:x.R,color:cssVar('--plot-ink'),dash:[6,4],w:1.6,hov:nm+' reflects'})}}
+ return out;
+}
+function drawSpectra(){
+ const cv=$('#spec');if(!cv.clientWidth)return;
+ const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+ if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
+ const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+ const bg=cssVar('--plot-bg'),grid=cssVar('--plot-grid'),ink=cssVar('--plot-ink');g.fillStyle=bg;g.fillRect(0,0,W,H);
+ const m={l:46,r:12,t:12,b:44},pw=W-m.l-m.r,ph=H-m.t-m.b,X0=340,X1=780,X=l=>m.l+(l-X0)/(X1-X0)*pw;
+ const Y=v=>state.log?m.t+ph*clamp(-Math.log10(Math.max(v,1e-9))/7,0,1):m.t+ph*(1-clamp(v,0,1));
+ g.font='12px "Atkinson Hyperlegible",system-ui,sans-serif';g.textBaseline='middle';g.textAlign='right';g.lineWidth=1;
+ const ticks=state.log?[0,1,2,3,4,5,6,7].map(n=>[Math.pow(10,-n),'OD '+n]):[0,.25,.5,.75,1].map(v=>[v,Math.round(v*100)+'%']);
+ for(const [v,lab] of ticks){const y=Math.round(Y(v))+.5;g.strokeStyle=grid;g.beginPath();g.moveTo(m.l,y);g.lineTo(m.l+pw,y);g.stroke();g.fillStyle=ink;g.fillText(lab,m.l-6,y)}
+ g.textAlign='center';g.textBaseline='top';
+ for(let l=350;l<=750;l+=50){const x=Math.round(X(l))+.5;g.strokeStyle=grid;g.beginPath();g.moveTo(x,m.t);g.lineTo(x,m.t+ph);g.stroke();g.fillStyle=ink;g.fillText(l,x,m.t+ph+16)}
+ g.fillStyle=ink;g.fillText('Wavelength (nm)',m.l+pw/2,m.t+ph+29);
+ for(let l=X0;l<X1;l++){g.fillStyle=(l>=400&&l<=700)?C.monoColor(l):'rgba(130,130,130,.45)';g.fillRect(X(l),m.t+ph+1,X(l+1)-X(l)+.6,6)}
+ const cs=curves(),base=Y(0);
+ g.font='11px "Atkinson Hyperlegible",system-ui,sans-serif';g.textAlign='center';g.textBaseline='top';
+ for(const k of C.BORDER){const B=C.BANDS[k];g.save();g.globalAlpha=.1;g.fillStyle=B.col;g.fillRect(X(B.c-B.w/2),m.t,X(B.c+B.w/2)-X(B.c-B.w/2),ph);g.restore();g.fillStyle=B.col;g.fillText(C.cap(B.name),X(B.c),m.t+1)}
+ const path=a=>{g.beginPath();for(let l=X0;l<=X1;l++){const x=X(l),y=Y(a[l-C.L0]);l===X0?g.moveTo(x,y):g.lineTo(x,y)}};
+ for(const c of cs){if(!c.fill)continue;g.save();g.globalAlpha=c.alpha;g.fillStyle=c.color;path(c.a);g.lineTo(X(X1),base);g.lineTo(X(X0),base);g.closePath();g.fill();g.restore();
+  if(c.line){g.save();g.strokeStyle=c.color;g.lineWidth=c.w;path(c.a);g.stroke();g.restore()}}
+ for(const c of cs){if(c.fill&&!c.line)continue;if(c.fill)continue;g.save();g.strokeStyle=c.color;g.lineWidth=c.w;g.setLineDash(c.dash||[]);path(c.a);g.stroke();g.restore()}
+ g.font='12px "Atkinson Hyperlegible",system-ui,sans-serif';g.textAlign='center';g.textBaseline='bottom';const used=[];
+ for(const c of cs){if(!c.label)continue;let mv=0;for(let l=X0;l<=X1;l++)mv=Math.max(mv,c.a[l-C.L0]);if(mv<=0)continue;
+  const idx=[];for(let l=X0;l<=X1;l++)if(c.a[l-C.L0]>=0.9*mv)idx.push(l);
+  const lx=idx[Math.floor(idx.length/2)];let tx=clamp(X(lx),m.l+40,m.l+pw-40),ty=Y(c.a[lx-C.L0])-4;if(state.log&&ty<m.t+12)ty=m.t+12;
+  for(const u of used)if(Math.abs(u[0]-tx)<70&&Math.abs(u[1]-ty)<14)ty=u[1]-14;ty=Math.max(ty,m.t+11);used.push([tx,ty]);
+  g.lineWidth=3;g.strokeStyle=bg;g.strokeText(c.label,tx,ty);g.fillStyle=c.fill?ink:c.color;g.fillText(c.label,tx,ty)}
+ if(state.hover!=null){const l=state.hover,x=X(l);g.strokeStyle=ink;g.lineWidth=1;g.setLineDash([3,3]);g.beginPath();g.moveTo(x,m.t);g.lineTo(x,m.t+ph);g.stroke();g.setLineDash([]);
+  const rows=[['Wavelength',Math.round(l)+' nm']];
+  for(const c of cs){if(!c.hov||c.hov==='Lamp'||c.hov==='Light at sample')continue;const v=c.a[l-C.L0];rows.push([c.hov,state.log?(v>1e-9?'OD '+(-Math.log10(v)).toFixed(1):'OD 9+'):(v*100>=10?Math.round(v*100):(v*100).toFixed(1))+'%'])}
+  const lines=rows.slice(0,10),bw=Math.min(W-20,Math.max(...lines.map(r=>g.measureText(r[0]+'  '+r[1]).width))+16),bh=lines.length*16+10;
+  let bx=x+10;if(bx+bw>W-4)bx=x-bw-10;bx=Math.max(4,bx);const by=m.t+6;
+  g.fillStyle=bg;g.globalAlpha=.94;g.fillRect(bx,by,bw,bh);g.globalAlpha=1;g.strokeStyle=grid;g.strokeRect(bx+.5,by+.5,bw,bh);
+  g.textAlign='left';g.textBaseline='middle';lines.forEach((r,i)=>{g.fillStyle=ink;g.fillText(r[0],bx+8,by+13+i*16);g.textAlign='right';g.fillText(r[1],bx+bw-8,by+13+i*16);g.textAlign='left'})}
+}
+(function(){const cv=$('#spec');
+ const mv=e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left,l=340+(x-46)/(r.width-58)*440;state.hover=l>=340&&l<=780?Math.round(l):null;drawSpectra()};
+ cv.addEventListener('pointermove',mv);cv.addEventListener('pointerdown',mv);cv.addEventListener('pointerleave',()=>{state.hover=null;drawSpectra()});
+ if(window.ResizeObserver)new ResizeObserver(()=>drawSpectra()).observe(cv);else window.addEventListener('resize',drawSpectra)})();
+
+/* ---------- tasks, examples, save/load ---------- */
+function renderStart(){
+ const adv=state.mode==='adv';
+ const tasks=Object.entries(TASKS).filter(([k,t])=>adv||!t.adv),ex=EXAMPLES.filter(e=>adv||!e[3]);
+ $('#startSel').innerHTML='<option value="">Free design</option><optgroup label="Tasks: you design it">'+tasks.map(([k,t])=>'<option value="t:'+k+'">'+esc(t.title)+'</option>').join('')+'</optgroup><optgroup label="Examples: predict first">'+ex.map(e=>'<option value="e:'+e[0]+'">'+esc(e[1])+'</option>').join('')+'</optgroup>';
+ $('#startSel').value=state.task?'t:'+state.task:'';
+}
+function renderMode(){$$('#modeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===state.mode?'true':'false'));document.body.dataset.mode=state.mode}
+function setMode(m){
+ if(m===state.mode)return;state.mode=m;
+ if(m==='simple'){const n0=state.board.length;let seenCam=false;
+  state.board=state.board.filter(p=>{const d=def(p);if(d.adv)return false;if(d.kind==='camera'){if(seenCam)return false;seenCam=true}return true});
+  if(state.board.length<n0)toast('Simple mode has fewer parts. The parts only found in Advanced mode were removed from the grid.');
+  if(state.task&&TASKS[state.task].adv)state.task=null;
+  state.board.forEach(p=>{if(p.slots)delete p.slots});
+ }
+ state.sel=null;state.armed=null;state.note='';state.exTitle='';state.pred=null;state.hint=false;state.done=false;state.lampOn=false;predMode='';
+ renderMode();renderStart();syncArm();update();
+}
+$('#modeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setMode(b.dataset.mode)});
+function reset(){state.lampOn=false;state.pred=null;state.sel=null;state.armed=null;state.done=false;state.hint=false;state.note='';syncArm()}
+function loadLayout(key){state.board=C.LAYOUTS[key]()}
+$('#startSel').addEventListener('change',e=>{const v=e.target.value;reset();state.board=[];state.task=null;
+ if(v[0]==='t')state.task=v.slice(2);
+ else if(v[0]==='e'){const ex=EXAMPLES.find(x=>x[0]===v.slice(2));loadLayout(ex[0]);state.note=ex[2];state.exTitle=ex[1]}
+ predMode='';update()});
+$('#btnClear').addEventListener('click',()=>{reset();state.board=[];state.task=null;$('#startSel').value='';predMode='';update()});
+function renderTask(){
+ const box=$('#mission'),t=state.task?TASKS[state.task]:null;
+ if(t&&sim.complete&&sim.sample&&sim.sample.id===t.pid&&C.checkTask(t.mode,sim,scan,state.board)&&(t.mode==='sequence'||state.lampOn))state.done=true;
+ const goal={live:'Goal: a bright, clean image of every dye in the sample.',sequence:'Goal: every dye has a wheel or turret setting with a bright, clean image.',cams2:'Goal: each dye is bright and clean on its own camera, at the same time.',bf:'Goal: a bright brightfield image reaches a camera.',bfred:'Goal: a bright brightfield image in red light reaches a camera.',dia:'Goal: a bright, clean GFP image, excited from behind, with no dichroic on the grid.'};
+ if(t){let h='<h2>Task: '+esc(t.title)+'</h2><p>'+esc(t.text)+'</p><div class="row"><span class="status'+(state.done?' ok':'')+'">'+(state.done?'Complete.':goal[t.mode])+'</span><button class="btn" type="button" data-act="hint">'+(state.hint?'Hide hint':'Show hint')+'</button><button class="btn" type="button" data-act="sol">Show a working design</button></div>';
+  if(state.hint)h+='<p class="hinttext">'+esc(t.hint)+'</p>';box.innerHTML=h;return}
+ if(state.note){box.innerHTML='<h2>'+esc(state.exTitle||'Example')+'</h2><p>'+esc(state.note)+'</p>';return}
+ const adv=state.mode==='adv';
+ box.innerHTML='<h2>How this works</h2><ol class="steps"><li>Drag parts onto the grid. Select one and rotate it: mirrors and dichroics send light around corners, and the lens of the objective and camera must face the light.</li><li>Use the spectra below to decide which colours each part passes, reflects or blocks.</li><li>Predict what the camera will show, then switch the lamps on.</li></ol><p class="note" style="margin-top:6px">'+(adv?'Advanced mode adds LEDs, light combiners, beam splitters, up to three cameras, transmitted light (a lamp behind the sample), multi-colour filters, filter wheels and a dichroic turret.':'Simple mode has one lamp, one camera, single-colour filters and a few dichroics. Switch to Advanced for more.')+' Try a task from the menu at the top, or start with a free design.</p>';
+}
+$('#mission').addEventListener('click',e=>{const a=e.target.dataset&&e.target.dataset.act;if(!a)return;
+ if(a==='hint'){state.hint=!state.hint;renderTask()}
+ if(a==='sol'&&state.task){state.board=C.LAYOUTS[TASKS[state.task].sol]();state.sel=null;update();toast('A working design is on the grid. Switch the lamp on and compare it with how you would have built it.')}});
+function exportJSON(){return JSON.stringify({v:3,mode:state.mode,parts:state.board.map(p=>({pid:p.pid,c:p.c,r:p.r,rot:p.rot,slots:p.slots||undefined,pos:p.pos||0,on:p.on===false?false:undefined}))})}
+$('#btnShare').addEventListener('click',()=>{$('#dlgText').value=exportJSON();$('#dlg').showModal()});
+$('#dlgClose').addEventListener('click',()=>$('#dlg').close());
+$('#dlgCopy').addEventListener('click',async()=>{const t=$('#dlgText');t.select();try{await navigator.clipboard.writeText(t.value);toast('Copied.')}catch(_){try{document.execCommand('copy');toast('Copied.')}catch(__){toast('Select the text and copy it manually.')}}});
+$('#dlgLoad').addEventListener('click',()=>{
+ try{const j=JSON.parse($('#dlgText').value);if(!j||!Array.isArray(j.parts))throw 0;if(j.mode==='adv'||j.mode==='simple'){state.mode=j.mode;renderMode()}const nb=[],cnt={};let smp=0;
+  for(const r of j.parts){const d=C.PID[r.pid];if(!d||(d.adv&&state.mode==='simple'))continue;const c=Math.round(+r.c),rr=Math.round(+r.r),rot=((Math.round(+r.rot)||0)%4+4)%4;
+   if(!(c>=0&&rr>=0&&c<C.COLS&&rr<C.ROWS)||nb.some(p=>p.c===c&&p.r===rr))continue;
+   cnt[d.id]=(cnt[d.id]||0)+1;if(cnt[d.id]>d.limit)continue;if(d.kind==='sample'&&smp++>0)continue;const np=C.put(d.id,c,rr,rot);if(d.kind==='lamp')np.on=r.on!==false;if(holds(d.kind)){np.slots=[0,1,2,3].map(i=>{const s=(r.slots||[])[i];return C.PID[s]&&C.PID[s].kind===holds(d.kind)?s:null});np.pos=clamp(Math.round(+r.pos)||0,0,3)}nb.push(np)}
+  reset();state.task=null;state.board=nb;predMode='';renderStart();update();$('#dlg').close();toast('Design loaded.');
+ }catch(_){toast('That text is not a valid design.')}
+});
+$('#btnTheme').addEventListener('click',()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark';drawSpectra()});
+
+/* ---------- update ---------- */
+function update(focusUid){
+ geo=C.trace(state.board,{geo:true});sim=C.analyze(state.board);ver=C.verdict(sim);diag=C.diagnose(sim);scan=sim.complete?C.scanWheels(state.board):null;
+ renderBoard();renderSel();renderPred();renderResults();renderTask();syncBin();syncGroups();drawSpectra();drawCams();
+ if(focusUid){const n=$('.part[data-uid="'+focusUid+'"]');if(n&&document.activeElement&&document.activeElement.tagName==='BODY')n.focus()}
+}
+renderBin();renderStart();renderGroups();renderMode();update();
+})();
+
+</script>
+</body>
+</html>
