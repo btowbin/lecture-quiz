@@ -118,14 +118,17 @@ QUIZ.course('transgenic', ({ r, table }) => ({
       exp: r`A single crossover inserts the entire plasmid and duplicates the homologous region. The direct repeats can recombine again, so the integrant can be lost.` },
 
     { id: 'T3-03', lec: 3, diff: 3, topic: 'Marker-free strategy',
-      q: r`You can transform a <i>ura3</i>-deficient yeast strain with a URA3 gene, and you can use 5-FOA, a compound that kills cells expressing URA3.` +
+      q: r`You want to tag a gene with <b>GFP</b> in a <i>ura3</i>-deficient yeast strain <b>without leaving a selectable marker</b> in the genome. The figure shows the locus, the tagging cassette (the two identical 3′ flanks are direct repeats around URA3) and the desired result. 5-FOA is a compound that kills cells expressing URA3.` +
          table(['strain', 'growth on −ura', 'growth on +ura', 'growth on 5-FOA + ura'], [['ΔURA3', 'no', 'yes', 'yes'], ['ΔURA3 + transgenic URA3', 'yes', 'yes', 'no']]) +
-         r`Which strategy gives a strain with the transgene but <b>without the URA3 marker</b>?`,
-      opts: [r`Integrate with URA3 as selectable marker (grow on −ura), then plate on 5-FOA: survivors have lost URA3 by recombination between the repeats; check by PCR which of them kept the transgene`,
-             r`Plate the transformed cells directly on 5-FOA`,
-             r`Transform the transgene without URA3 and select on −ura`,
-             r`Integrate with URA3 and keep the cells on +ura medium without selection`],
-      exp: r`Step 1: URA3 allows selection of integrants (−ura). Step 2: 5-FOA selects <i>against</i> URA3, so only cells that looped out URA3 (by recombination between the duplicated homology) survive. Some of them keep the transgene, others return to wild type, so the clones must be genotyped.<br>Direct plating on 5-FOA only selects for cells that never took up URA3; without URA3 on the construct, −ura selects nothing.` },
+         r`These steps are listed in random order:<br><b>1</b> · Grow on non-selective medium (+ uracil)<br><b>2</b> · Select on 5-FOA (+ uracil)<br><b>3</b> · Transform the <i>ura3</i> strain with the tagging cassette<br><b>4</b> · Select on medium without uracil (−ura)<br>Which is the <b>correct order</b> of the experiment?`,
+      fig: { img: 'transgenic/ura3_markerfree_design.png' },
+      opts: [r`3 → 4 → 1 → 2`,
+             r`3 → 4 → 2 → 1`,
+             r`3 → 1 → 4 → 2`,
+             r`3 → 2 → 1 → 4`],
+      exp: r`Correct order: <b>3 → 4 → 1 → 2</b>, i.e. transform → select on −ura → grow without selection → select on 5-FOA.<br>
+             The cassette integrates by homologous recombination (gene and 3′ flank), and −ura selects the cells that took up URA3. Without selection, the two identical 3′ flanks occasionally recombine and loop out URA3 together with one flank; these cells are Ura<sup>−</sup> again. On 5-FOA the Ura3 enzyme converts 5-FOA into a toxic compound, so only cells that lost URA3 survive. The result is the GFP-tagged locus with a single 3′ flank, without marker or scar.<br>
+             5-FOA before the outgrowth kills the Ura<sup>+</sup> cells before the loop-out has happened; ending on −ura would select <i>for</i> the marker you want to remove; and without the transformation first there is nothing to select. Check the 5-FOA survivors by PCR: some are ura3 point mutants that still carry the cassette.` },
 
     { id: 'T3-04', lec: 3, diff: 2, topic: 'Counter-selection',
       q: r`A yeast clone with an integrated URA3 cassette (<i>ura3</i> deficient background) is plated on medium with <b>uracil + 5-FOA</b>. Which cells grow?`,
