@@ -191,6 +191,7 @@ const STEPS = ['Goal','Insertion site','PAM','Guide RNA','Cut site','Mutate PAM'
 const fresh = () => ({step:0, done:{}, ins:null, gfpStop:null, pamSel:null, pam:null, guide:null, cut:null, mut:null, mutDraft:null, L1:50, L2:50, ampF:'', ampR:'', g1:'', g2:'', g3:'', tmpl:false, solShown:{}});
 let S = fresh();
 try { const j = JSON.parse(localStorage.getItem('vhp1-crispr-app')||'null'); if (j && j.step!=null) S = Object.assign(fresh(), j); } catch(e){}
+if (S.pam && Math.abs(S.pam.cut - INS) !== BEST.dist){ S.pam=null; S.guide=null; S.cut=null; S.mut=null; S.done[2]=false; S.done[3]=false; S.done[4]=false; S.done[5]=false; S.step=Math.min(S.step,2); }
 const save = () => { try { localStorage.setItem('vhp1-crispr-app', JSON.stringify(S)); } catch(e){} };
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -241,12 +242,20 @@ function renderViewer(el, o){
 }
 /* ---- selection and copy tools (forward / reverse complement) ---- */
 let COPYMODE = false;
+/* Does the selection range cover at least one character of el? Range.intersectsNode() is also true when the range merely
+   touches el (e.g. Safari ends a drag at offset 0 of the next base), which added one extra nucleotide to the copy. */
+function covers(r, el){
+  const tn = el.classList.contains('tok') ? el.firstChild : el.lastChild;       // text node holding the base (after the optional label)
+  if (!tn || tn.nodeType !== 3 || !tn.length) return false;
+  const er = document.createRange(); er.setStart(tn, 0); er.setEnd(tn, tn.length);
+  return r.compareBoundaryPoints(Range.END_TO_START, er) < 0 && r.compareBoundaryPoints(Range.START_TO_END, er) > 0;
+}
 function selInfo(){
   const sel = window.getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
   const r = sel.getRangeAt(0), found = [];
   for (const id of ['viewer','viewer2']){
     const root = $(id); if (!root.offsetParent) continue;
-    const items = [...root.querySelectorAll('.l1 .b, .l1 .tok')].filter(el => r.intersectsNode(el));
+    const items = [...root.querySelectorAll('.l1 .b, .l1 .tok')].filter(el => covers(r, el));
     if (items.length) found.push([id, items]);
   }
   if (!found.length) return null;
@@ -363,7 +372,7 @@ R[2] = () => {
   const c = candidatePams(30);
   let h = `<h2>2 · Find a PAM site near the insertion point</h2>
   <p>Cas9 needs a <b>PAM</b>, <code>5′-NGG-3′</code>, directly next to the target. The guide RNA is the 20 bases <b>5′ of the PAM</b>, and Cas9 cuts <b>3 bp 5′ of the PAM</b> (between the 3rd and 4th last base of the guide). The PAM can lie on either strand: on the lower strand it appears as <code>CCN</code> in the upper sequence.</p>
-  <p><b>Click in the upper sequence on the first base of a PAM</b> (the 3 bases are highlighted). Choose it such that the <b>cut site is as close as possible to the insertion site</b>, because the editing efficiency drops quickly with distance.</p>${fb(2)}`;
+  <p><b>Click in the upper sequence on the first base of a PAM</b> (the 3 bases are highlighted). Choose it such that the <b>cut site is as close as possible to the insertion site</b>, because the editing efficiency drops quickly with distance. You can only continue with the <b>closest</b> PAM.</p>${fb(2)}`;
   if (S.pam){
     const p = S.pam, d = Math.abs(p.cut-INS);
     h += `<div class="msg info"><b>Selected PAM:</b> <code>${esc(p.pam)}</code> on the ${p.strand==='+'?'upper (+)':'lower (−)'} strand, positions ${p.s+1}–${p.s+3}. The cut would be <b>${d} bp</b> from the insertion site${d===BEST.dist?' (the closest possible)':''}.</div>`;
@@ -374,12 +383,12 @@ R[2] = () => {
 };
 function pickPam(i){
   const st = pamAt(i);
-  if (!st){ FB[2] = msg('bad', `<code>${WT.slice(i,i+3)}</code> is not a PAM: look for <code>NGG</code> in the upper strand, or <code>CCN</code> (= NGG on the lower strand).`); S.pam=null; S.guide=null; S.cut=null; }
+  if (!st){ FB[2] = msg('bad', `<code>${WT.slice(i,i+3)}</code> is not a PAM: look for <code>NGG</code> in the upper strand, or <code>CCN</code> (= NGG on the lower strand).`); S.pam=null; S.guide=null; S.cut=null; S.done[2]=false; }
   else {
     const pi = pamInfo(i, st), d = Math.abs(pi.cut-INS);
     if (pi.proto[0] < 0) { FB[2]=msg('bad','Too close to the end of the sequence.'); }
-    else if (d > 20){ S.pam=null; FB[2] = msg('warn', `Valid PAM (<code>${pi.pam}</code>), but the cut would be ${d} bp from the insertion site. Homology-directed repair works best within about 10 bp, so look for a closer PAM.`); }
-    else { S.pam = pi; S.guide=null; S.cut=null; S.mut=null; FB[2] = msg('ok', d===BEST.dist ? 'Excellent: this is the closest PAM, you chose well.' : `Valid PAM, cut ${d} bp from the insertion site. (A closer one exists: show all PAMs below if you want to compare.)`); mark(2); }
+    else if (d !== BEST.dist){ S.pam=null; S.guide=null; S.cut=null; S.mut=null; S.done[2]=false; FB[2] = msg('warn', `<code>${pi.pam}</code> is a valid PAM, but the cut would be ${d} bp from the insertion site, and a PAM with a closer cut site exists. Homology-directed repair works best when the cut is as close as possible to the insertion, so look for the closest one (remember that a PAM can be on either strand) before you continue.`); }
+    else { S.pam = pi; S.guide=null; S.cut=null; S.mut=null; FB[2] = msg('ok', 'Excellent: this is the closest PAM, you chose well.'); mark(2); }
   }
   save(); render();
 }
